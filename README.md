@@ -17,8 +17,30 @@ This package provides the core library used to build session tracking, checkpoin
 
 ## Installation
 
+**Global CLI (recommended for standalone use):**
+
+```bash
+npm install -g entire-cli
+```
+
+Then use the `entire` command directly:
+
+```bash
+cd your-project
+entire enable
+entire status
+```
+
+**As a project dependency:**
+
 ```bash
 npm install entire-cli
+```
+
+**As a dev dependency (for tools/plugins that integrate with Entire):**
+
+```bash
+npm install --save-dev entire-cli
 ```
 
 Requires Node.js >= 18 and Git.

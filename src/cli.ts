@@ -23,6 +23,10 @@ import { clean } from './commands/clean.js';
 import { reset } from './commands/reset.js';
 import { explainCommit, getCheckpointDetail } from './commands/explain.js';
 import { discoverResumeInfo, listResumableBranches } from './commands/resume.js';
+import { isEnabled } from './config.js';
+import { createSessionStore } from './store/session-store.js';
+import { createCheckpointStore } from './store/checkpoint-store.js';
+import { createManualCommitStrategy } from './strategy/manual-commit.js';
 import { getVersion } from './index.js';
 
 // ============================================================================
@@ -296,6 +300,63 @@ async function cmdResume(args: string[]): Promise<void> {
   }
 }
 
+// ============================================================================
+// Git Hook Dispatch
+// ============================================================================
+
+/**
+ * Handle `entire hooks git <hook-name> [args...]`
+ *
+ * This is invoked by the git hooks installed via `entire enable`.
+ * Each hook delegates to the corresponding strategy method.
+ * All hooks are designed to fail silently (the shell scripts use `|| true`
+ * except commit-msg which uses `|| exit 1`).
+ */
+async function cmdHooksGit(args: string[]): Promise<void> {
+  const hookName = args[0];
+  const hookArgs = args.slice(1);
+
+  // Bail silently if Entire is not enabled
+  if (!(await isEnabled())) return;
+
+  const strategy = createManualCommitStrategy({
+    sessionStore: createSessionStore(),
+    checkpointStore: createCheckpointStore(),
+  });
+
+  switch (hookName) {
+    case 'prepare-commit-msg': {
+      // Args: <commit-msg-file> [<source>] [<sha>]
+      const commitMsgFile = hookArgs[0];
+      const source = hookArgs[1] ?? '';
+      const sha = hookArgs[2] ?? '';
+      if (!commitMsgFile) return;
+      await strategy.prepareCommitMsg(commitMsgFile, source, sha);
+      break;
+    }
+    case 'commit-msg': {
+      // Args: <commit-msg-file>
+      const commitMsgFile = hookArgs[0];
+      if (!commitMsgFile) return;
+      await strategy.commitMsg(commitMsgFile);
+      break;
+    }
+    case 'post-commit': {
+      await strategy.postCommit();
+      break;
+    }
+    case 'pre-push': {
+      // Args: <remote> <url>
+      const remote = hookArgs[0] ?? 'origin';
+      await strategy.prePush(remote);
+      break;
+    }
+    default:
+      // Unknown hook — ignore silently (hooks must not break git)
+      break;
+  }
+}
+
 async function cmdVersion(): Promise<void> {
   console.log(`entire-cli ${getVersion()}`);
 }
@@ -353,6 +414,16 @@ async function main(): Promise<void> {
       return cmdExplain(commandArgs);
     case 'resume':
       return cmdResume(commandArgs);
+    case 'hooks': {
+      // `entire hooks git <hook-name> [args...]`
+      const subcommand = commandArgs[0];
+      if (subcommand === 'git') {
+        return cmdHooksGit(commandArgs.slice(1));
+      }
+      console.error(`Unknown hooks subcommand: ${subcommand}`);
+      process.exit(1);
+      break;
+    }
     case 'version':
     case '--version':
     case '-v':
