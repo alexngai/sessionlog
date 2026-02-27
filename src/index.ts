@@ -8,6 +8,25 @@
  * @packageDocumentation
  */
 
+import { createRequire } from 'node:module';
+
+// =============================================================================
+// Version
+// =============================================================================
+
+const require = createRequire(import.meta.url);
+const { version: VERSION } = require('../package.json') as { version: string };
+
+/** Current package version */
+export { VERSION };
+
+/**
+ * Get the current version string.
+ */
+export function getVersion(): string {
+  return VERSION;
+}
+
 // =============================================================================
 // Core Types
 // =============================================================================
