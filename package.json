@@ -1,6 +1,6 @@
 {
   "name": "entire-cli",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Session tracking and checkpoint management for AI coding agents",
   "type": "module",
   "main": "./dist/index.js",
