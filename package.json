@@ -12,6 +12,9 @@
       "import": "./dist/index.js"
     }
   },
+  "bin": {
+    "entire": "./dist/cli.js"
+  },
   "files": [
     "dist"
   ],

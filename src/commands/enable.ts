@@ -37,6 +37,15 @@ export interface EnableOptions {
 
   /** Save to local settings instead of project settings */
   local?: boolean;
+
+  /** Write to settings.json even if already present */
+  project?: boolean;
+
+  /** Disable automatic session log pushing */
+  skipPushSessions?: boolean;
+
+  /** Opt out of anonymous analytics */
+  telemetry?: boolean;
 }
 
 export interface EnableResult {
@@ -102,6 +111,14 @@ export async function enable(options: EnableOptions = {}): Promise<EnableResult>
     enabled: true,
     strategy: 'manual-commit',
   };
+
+  if (options.skipPushSessions !== undefined) {
+    settings.skipPushSessions = options.skipPushSessions;
+  }
+
+  if (options.telemetry !== undefined) {
+    settings.telemetryEnabled = options.telemetry;
+  }
 
   if (options.local) {
     await saveLocalSettings(settings, cwd);
