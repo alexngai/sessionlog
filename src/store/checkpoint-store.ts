@@ -2,8 +2,8 @@
  * Checkpoint Store
  *
  * Manages checkpoint data stored on git branches.
- * - Temporary checkpoints live on shadow branches (entire/<hash>)
- * - Committed checkpoints live on entire/checkpoints/v1 branch
+ * - Temporary checkpoints live on shadow branches (runlog/<hash>)
+ * - Committed checkpoints live on runlog/checkpoints/v1 branch
  */
 
 import * as crypto from 'node:crypto';
@@ -102,12 +102,12 @@ export interface CheckpointStore {
  *
  * @param cwd - The project working directory (used for shadow branches / temporary checkpoints)
  * @param sessionRepoCwd - Optional separate repo directory for committed checkpoints.
- *   When provided, the `entire/checkpoints/v1` branch and its data are stored
+ *   When provided, the `runlog/checkpoints/v1` branch and its data are stored
  *   in this repo instead of the project repo. Shadow branches remain in the
  *   project repo since they reference the project's git objects.
  * @param checkpointsBranch - Optional override for the checkpoints branch name.
- *   Defaults to `entire/checkpoints/v1`. When multiple projects share a session
- *   repo, each project uses a unique branch like `entire/checkpoints/v1/<projectID>`.
+ *   Defaults to `runlog/checkpoints/v1`. When multiple projects share a session
+ *   repo, each project uses a unique branch like `runlog/checkpoints/v1/<projectID>`.
  */
 export function createCheckpointStore(
   cwd?: string,
@@ -271,7 +271,7 @@ export function createCheckpointStore(
       const sessionIndex = '1'; // First session in this checkpoint
 
       const metadata: CommittedMetadata = {
-        cliVersion: 'opentasks-entire',
+        cliVersion: 'opentasks-runlog',
         checkpointID: opts.checkpointID,
         sessionID: opts.sessionID,
         strategy: opts.strategy,
@@ -309,7 +309,7 @@ export function createCheckpointStore(
 
       // Build checkpoint summary
       const summary: CheckpointSummary = {
-        cliVersion: 'opentasks-entire',
+        cliVersion: 'opentasks-runlog',
         checkpointID: opts.checkpointID,
         strategy: opts.strategy,
         branch: opts.branch,
@@ -375,7 +375,7 @@ export function createCheckpointStore(
 
       // Create commit
       const author = await getGitAuthor(targetCwd);
-      const commitMessage = `Entire-Checkpoint: ${opts.checkpointID}\n\nSession: ${opts.sessionID}`;
+      const commitMessage = `Runlog-Checkpoint: ${opts.checkpointID}\n\nSession: ${opts.sessionID}`;
       const commitHash = await commitTree(rootTree, parentHash, commitMessage, author, targetCwd);
 
       // Update branch ref
@@ -441,7 +441,7 @@ export function createCheckpointStore(
 
       const summaries: CheckpointSummary[] = [];
       for (const line of logOutput.split('\n').filter(Boolean)) {
-        const match = line.match(/^([0-9a-f]+)\s+Entire-Checkpoint:\s+([0-9a-f]+)/);
+        const match = line.match(/^([0-9a-f]+)\s+Runlog-Checkpoint:\s+([0-9a-f]+)/);
         if (!match) continue;
 
         const id = match[2];

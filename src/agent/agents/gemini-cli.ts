@@ -1,7 +1,7 @@
 /**
  * Gemini CLI Agent
  *
- * Implementation of the Entire agent interface for Google's Gemini CLI.
+ * Implementation of the Runlog agent interface for Google's Gemini CLI.
  * Handles JSON transcript format with messages array, Gemini-specific
  * hook installation, and session lifecycle management.
  */
@@ -49,7 +49,7 @@ const HOOK_NAMES = [
   'notification',
 ] as const;
 
-const ENTIRE_HOOK_PREFIX = 'entire ';
+const RUNLOG_HOOK_PREFIX = 'runlog ';
 
 /** Tools that modify files in Gemini CLI */
 const FILE_MODIFICATION_TOOLS = new Set(['write_file', 'edit_file', 'save_file', 'replace']);
@@ -116,8 +116,8 @@ class GeminiCLIAgent
   }
 
   async getSessionDir(repoPath: string): Promise<string> {
-    if (process.env.ENTIRE_TEST_GEMINI_PROJECT_DIR) {
-      return process.env.ENTIRE_TEST_GEMINI_PROJECT_DIR;
+    if (process.env.RUNLOG_TEST_GEMINI_PROJECT_DIR) {
+      return process.env.RUNLOG_TEST_GEMINI_PROJECT_DIR;
     }
     const projectDir = getProjectHash(repoPath);
     return path.join(os.homedir(), '.gemini', 'tmp', projectDir, 'chats');
@@ -250,33 +250,33 @@ class GeminiCLIAgent
     const hooks = (rawSettings.hooks ?? {}) as Record<string, GeminiHookMatcher[]>;
 
     const hookDefs = [
-      { key: 'SessionStart', hookName: 'session-start', matcher: '', name: 'entire-session-start' },
+      { key: 'SessionStart', hookName: 'session-start', matcher: '', name: 'runlog-session-start' },
       {
         key: 'SessionEnd',
         hookName: 'session-end',
         matcher: 'exit',
-        name: 'entire-session-end-exit',
+        name: 'runlog-session-end-exit',
       },
       {
         key: 'SessionEnd',
         hookName: 'session-end',
         matcher: 'logout',
-        name: 'entire-session-end-logout',
+        name: 'runlog-session-end-logout',
       },
-      { key: 'BeforeAgent', hookName: 'before-agent', matcher: '', name: 'entire-before-agent' },
-      { key: 'AfterAgent', hookName: 'after-agent', matcher: '', name: 'entire-after-agent' },
-      { key: 'BeforeModel', hookName: 'before-model', matcher: '', name: 'entire-before-model' },
-      { key: 'AfterModel', hookName: 'after-model', matcher: '', name: 'entire-after-model' },
+      { key: 'BeforeAgent', hookName: 'before-agent', matcher: '', name: 'runlog-before-agent' },
+      { key: 'AfterAgent', hookName: 'after-agent', matcher: '', name: 'runlog-after-agent' },
+      { key: 'BeforeModel', hookName: 'before-model', matcher: '', name: 'runlog-before-model' },
+      { key: 'AfterModel', hookName: 'after-model', matcher: '', name: 'runlog-after-model' },
       {
         key: 'BeforeToolSelection',
         hookName: 'before-tool-selection',
         matcher: '',
-        name: 'entire-before-tool-selection',
+        name: 'runlog-before-tool-selection',
       },
-      { key: 'BeforeTool', hookName: 'before-tool', matcher: '*', name: 'entire-before-tool' },
-      { key: 'AfterTool', hookName: 'after-tool', matcher: '*', name: 'entire-after-tool' },
-      { key: 'PreCompress', hookName: 'pre-compress', matcher: '', name: 'entire-pre-compress' },
-      { key: 'Notification', hookName: 'notification', matcher: '', name: 'entire-notification' },
+      { key: 'BeforeTool', hookName: 'before-tool', matcher: '*', name: 'runlog-before-tool' },
+      { key: 'AfterTool', hookName: 'after-tool', matcher: '*', name: 'runlog-after-tool' },
+      { key: 'PreCompress', hookName: 'pre-compress', matcher: '', name: 'runlog-pre-compress' },
+      { key: 'Notification', hookName: 'notification', matcher: '', name: 'runlog-notification' },
     ];
 
     // If not force, check idempotency
@@ -284,23 +284,23 @@ class GeminiCLIAgent
       const sessionStartMatchers = hooks['SessionStart'] ?? [];
       for (const m of sessionStartMatchers) {
         for (const h of m.hooks) {
-          if (h.command === `entire hooks gemini session-start`) {
+          if (h.command === `runlog hooks gemini session-start`) {
             return 0; // Already installed
           }
         }
       }
     }
 
-    // Remove existing entire hooks
+    // Remove existing runlog hooks
     for (const key of Object.keys(hooks)) {
-      hooks[key] = removeEntireGeminiHooks(hooks[key] ?? []);
+      hooks[key] = removeRunlogGeminiHooks(hooks[key] ?? []);
       if (hooks[key].length === 0) delete hooks[key];
     }
 
     // Install all hooks
     for (const def of hookDefs) {
       const matchers = hooks[def.key] ?? [];
-      const cmd = `entire hooks gemini ${def.hookName}`;
+      const cmd = `runlog hooks gemini ${def.hookName}`;
       const entry: GeminiHookEntry = { name: def.name, type: 'command', command: cmd };
 
       // Find or create matcher
@@ -338,7 +338,7 @@ class GeminiCLIAgent
       const hooks = (rawSettings.hooks ?? {}) as Record<string, GeminiHookMatcher[]>;
 
       for (const key of Object.keys(hooks)) {
-        hooks[key] = removeEntireGeminiHooks(hooks[key] ?? []);
+        hooks[key] = removeRunlogGeminiHooks(hooks[key] ?? []);
         if (hooks[key].length === 0) delete hooks[key];
       }
 
@@ -365,7 +365,7 @@ class GeminiCLIAgent
       for (const key of Object.keys(hooks)) {
         for (const m of hooks[key] ?? []) {
           for (const h of m.hooks) {
-            if (h.command.startsWith(ENTIRE_HOOK_PREFIX)) return true;
+            if (h.command.startsWith(RUNLOG_HOOK_PREFIX)) return true;
           }
         }
       }
@@ -531,10 +531,10 @@ function getProjectHash(projectRoot: string): string {
   return crypto.createHash('sha256').update(projectRoot).digest('hex');
 }
 
-function removeEntireGeminiHooks(matchers: GeminiHookMatcher[]): GeminiHookMatcher[] {
+function removeRunlogGeminiHooks(matchers: GeminiHookMatcher[]): GeminiHookMatcher[] {
   const result: GeminiHookMatcher[] = [];
   for (const m of matchers) {
-    const filteredHooks = m.hooks.filter((h) => !h.command.startsWith(ENTIRE_HOOK_PREFIX));
+    const filteredHooks = m.hooks.filter((h) => !h.command.startsWith(RUNLOG_HOOK_PREFIX));
     if (filteredHooks.length > 0) {
       result.push({ ...m, hooks: filteredHooks });
     }

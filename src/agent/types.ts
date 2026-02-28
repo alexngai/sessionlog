@@ -3,7 +3,7 @@
  *
  * Interfaces for AI agent integrations. Each supported agent
  * (Claude Code, Cursor, Gemini CLI, OpenCode) implements these
- * interfaces to participate in the Entire session tracking lifecycle.
+ * interfaces to participate in the Runlog session tracking lifecycle.
  */
 
 import type { AgentName, AgentType, HookInput, Event, TokenUsage } from '../types.js';
@@ -28,7 +28,7 @@ export interface Agent {
   /** Whether this agent integration is in preview */
   readonly isPreview: boolean;
 
-  /** Directories that should never be modified/deleted by Entire */
+  /** Directories that should never be modified/deleted by Runlog */
   readonly protectedDirs: string[];
 
   /** Check if this agent is present in the current environment */

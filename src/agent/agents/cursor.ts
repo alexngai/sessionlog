@@ -1,7 +1,7 @@
 /**
  * Cursor Agent
  *
- * Implementation of the Entire agent interface for Cursor IDE.
+ * Implementation of the Runlog agent interface for Cursor IDE.
  * Handles JSONL transcript format, Cursor-specific hook installation,
  * and session lifecycle management.
  *
@@ -33,7 +33,7 @@ const HOOK_NAMES = [
   'subagent-stop',
 ] as const;
 
-const ENTIRE_HOOK_PREFIX = 'entire ';
+const RUNLOG_HOOK_PREFIX = 'runlog ';
 
 // ============================================================================
 // Cursor Hook Types
@@ -73,8 +73,8 @@ class CursorAgent implements Agent, HookSupport, TranscriptChunker {
   }
 
   async getSessionDir(repoPath: string): Promise<string> {
-    if (process.env.ENTIRE_TEST_CURSOR_PROJECT_DIR) {
-      return process.env.ENTIRE_TEST_CURSOR_PROJECT_DIR;
+    if (process.env.RUNLOG_TEST_CURSOR_PROJECT_DIR) {
+      return process.env.RUNLOG_TEST_CURSOR_PROJECT_DIR;
     }
     const projectDir = sanitizePathForCursor(repoPath);
     return path.join(os.homedir(), '.cursor', 'projects', projectDir);
@@ -221,10 +221,10 @@ class CursorAgent implements Agent, HookSupport, TranscriptChunker {
       let entries: CursorHookEntry[] = hooks[key] ?? [];
 
       if (force) {
-        entries = entries.filter((e) => !isEntireHook(e.command));
+        entries = entries.filter((e) => !isRunlogHook(e.command));
       }
 
-      const cmd = `entire hooks cursor ${hookName}`;
+      const cmd = `runlog hooks cursor ${hookName}`;
       if (!entries.some((e) => e.command === cmd)) {
         entries.push({ command: cmd });
         installed++;
@@ -252,7 +252,7 @@ class CursorAgent implements Agent, HookSupport, TranscriptChunker {
       const hooks = (rawFile.hooks ?? {}) as Record<string, CursorHookEntry[]>;
 
       for (const key of Object.keys(hooks)) {
-        hooks[key] = (hooks[key] ?? []).filter((e) => !isEntireHook(e.command));
+        hooks[key] = (hooks[key] ?? []).filter((e) => !isRunlogHook(e.command));
         if (hooks[key].length === 0) {
           delete hooks[key];
         }
@@ -280,7 +280,7 @@ class CursorAgent implements Agent, HookSupport, TranscriptChunker {
 
       for (const key of Object.keys(hooks)) {
         const entries = hooks[key];
-        if (Array.isArray(entries) && entries.some((e) => isEntireHook(e.command))) {
+        if (Array.isArray(entries) && entries.some((e) => isRunlogHook(e.command))) {
           return true;
         }
       }
@@ -308,8 +308,8 @@ class CursorAgent implements Agent, HookSupport, TranscriptChunker {
 // Helpers
 // ============================================================================
 
-function isEntireHook(command: string): boolean {
-  return command.startsWith(ENTIRE_HOOK_PREFIX);
+function isRunlogHook(command: string): boolean {
+  return command.startsWith(RUNLOG_HOOK_PREFIX);
 }
 
 const nonAlphanumericRegex = /[^a-zA-Z0-9]/g;

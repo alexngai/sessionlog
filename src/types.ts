@@ -1,7 +1,7 @@
 /**
- * Entire Core Types
+ * Runlog Core Types
  *
- * Core type definitions for the Entire session tracking system.
+ * Core type definitions for the Runlog session tracking system.
  * This module is designed with clean boundaries for future extraction
  * into a standalone package.
  */
@@ -377,7 +377,7 @@ export interface SessionChange {
 // Settings
 // ============================================================================
 
-export interface EntireSettings {
+export interface RunlogSettings {
   enabled: boolean;
   strategy: string;
   logLevel?: string;
@@ -391,7 +391,7 @@ export interface EntireSettings {
   sessionRepoPath?: string;
 }
 
-export const DEFAULT_SETTINGS: EntireSettings = {
+export const DEFAULT_SETTINGS: RunlogSettings = {
   enabled: false,
   strategy: 'manual-commit',
   logLevel: 'warn',
@@ -403,14 +403,14 @@ export const DEFAULT_SETTINGS: EntireSettings = {
 // Constants
 // ============================================================================
 
-export const ENTIRE_DIR = '.entire';
-export const ENTIRE_TMP_DIR = '.entire/tmp';
-export const ENTIRE_METADATA_DIR = '.entire/metadata';
-export const ENTIRE_SETTINGS_FILE = '.entire/settings.json';
-export const ENTIRE_SETTINGS_LOCAL_FILE = '.entire/settings.local.json';
-export const CHECKPOINTS_BRANCH = 'entire/checkpoints/v1';
-export const SHADOW_BRANCH_PREFIX = 'entire/';
+export const RUNLOG_DIR = '.runlog';
+export const RUNLOG_TMP_DIR = '.runlog/tmp';
+export const RUNLOG_METADATA_DIR = '.runlog/metadata';
+export const RUNLOG_SETTINGS_FILE = '.runlog/settings.json';
+export const RUNLOG_SETTINGS_LOCAL_FILE = '.runlog/settings.local.json';
+export const CHECKPOINTS_BRANCH = 'runlog/checkpoints/v1';
+export const SHADOW_BRANCH_PREFIX = 'runlog/';
 export const SHADOW_BRANCH_HASH_LENGTH = 7;
-export const SESSION_DIR_NAME = 'entire-sessions';
+export const SESSION_DIR_NAME = 'runlog-sessions';
 export const MAX_CHUNK_SIZE = 50 * 1024 * 1024; // 50MB
 export const STALE_SESSION_DAYS = 7;

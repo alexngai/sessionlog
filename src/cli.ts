@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Entire CLI Entry Point
+ * Runlog CLI Entry Point
  *
  * Minimal CLI wrapper over the library functions.
  * Parses arguments and dispatches to the appropriate command.
@@ -83,12 +83,12 @@ async function cmdEnable(args: string[]): Promise<void> {
   });
 
   if (!result.enabled) {
-    console.error('Failed to enable Entire:');
+    console.error('Failed to enable Runlog:');
     for (const err of result.errors) console.error(`  ${err}`);
     process.exit(1);
   }
 
-  console.log('Entire enabled.');
+  console.log('Runlog enabled.');
   if (result.agent) console.log(`  Agent: ${result.agent}`);
   console.log(`  Git hooks installed: ${result.gitHooksInstalled}`);
   console.log(`  Agent hooks installed: ${result.agentHooksInstalled}`);
@@ -105,12 +105,12 @@ async function cmdDisable(args: string[]): Promise<void> {
   });
 
   if (!result.disabled) {
-    console.error('Failed to disable Entire:');
+    console.error('Failed to disable Runlog:');
     for (const err of result.errors) console.error(`  ${err}`);
     process.exit(1);
   }
 
-  console.log('Entire disabled.');
+  console.log('Runlog disabled.');
   if (result.uninstalled) console.log('  Hooks uninstalled.');
 }
 
@@ -316,9 +316,9 @@ async function cmdResume(args: string[]): Promise<void> {
 // ============================================================================
 
 /**
- * Handle `entire hooks git <hook-name> [args...]`
+ * Handle `runlog hooks git <hook-name> [args...]`
  *
- * This is invoked by the git hooks installed via `entire enable`.
+ * This is invoked by the git hooks installed via `runlog enable`.
  * Each hook delegates to the corresponding strategy method.
  * All hooks are designed to fail silently (the shell scripts use `|| true`
  * except commit-msg which uses `|| exit 1`).
@@ -327,7 +327,7 @@ async function cmdHooksGit(args: string[]): Promise<void> {
   const hookName = args[0];
   const hookArgs = args.slice(1);
 
-  // Bail silently if Entire is not enabled
+  // Bail silently if Runlog is not enabled
   if (!(await isEnabled())) return;
 
   // Resolve session repo if configured
@@ -387,17 +387,17 @@ async function cmdHooksGit(args: string[]): Promise<void> {
 }
 
 async function cmdVersion(): Promise<void> {
-  console.log(`entire-cli ${getVersion()}`);
+  console.log(`runlog ${getVersion()}`);
 }
 
 function printHelp(): void {
-  console.log(`entire-cli ${getVersion()}
+  console.log(`runlog ${getVersion()}
 
-Usage: entire <command> [options]
+Usage: runlog <command> [options]
 
 Commands:
-  enable      Activate Entire in a repository
-  disable     Deactivate Entire hooks
+  enable      Activate Runlog in a repository
+  disable     Deactivate Runlog hooks
   status      Show current session information
   rewind      Browse and restore checkpoints
   doctor      Diagnose and fix stuck sessions
@@ -410,7 +410,7 @@ Commands:
 Options:
   enable --session-repo <path>   Store sessions in a separate repository
 
-Run 'entire <command> --help' for more information on a command.`);
+Run 'runlog <command> --help' for more information on a command.`);
 }
 
 // ============================================================================
@@ -447,7 +447,7 @@ async function main(): Promise<void> {
     case 'resume':
       return cmdResume(commandArgs);
     case 'hooks': {
-      // `entire hooks git <hook-name> [args...]`
+      // `runlog hooks git <hook-name> [args...]`
       const subcommand = commandArgs[0];
       if (subcommand === 'git') {
         return cmdHooksGit(commandArgs.slice(1));

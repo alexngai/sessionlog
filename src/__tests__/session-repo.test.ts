@@ -88,8 +88,8 @@ describe('resolveSessionRepoPath', () => {
   });
 
   it('should resolve relative paths within project root', () => {
-    const result = resolveSessionRepoPath('.entire-sessions', '/home/user/project');
-    expect(result).toBe('/home/user/project/.entire-sessions');
+    const result = resolveSessionRepoPath('.runlog-sessions', '/home/user/project');
+    expect(result).toBe('/home/user/project/.runlog-sessions');
   });
 });
 
@@ -300,7 +300,7 @@ describe('createCheckpointStore with sessionRepoCwd', () => {
     const store = createCheckpointStore(
       '/tmp/project',
       '/tmp/session-repo',
-      'entire/checkpoints/v1/my-project-abc123',
+      'runlog/checkpoints/v1/my-project-abc123',
     );
     expect(store).toBeDefined();
     expect(store.generateID).toBeInstanceOf(Function);
@@ -324,27 +324,27 @@ describe('createCheckpointStore with sessionRepoCwd', () => {
 describe('Project Namespacing', () => {
   it('should produce correct namespaced checkpoints branch', () => {
     const projectID = getProjectID('/home/user/my-project');
-    const cpBranch = `entire/checkpoints/v1/${projectID}`;
-    expect(cpBranch).toMatch(/^entire\/checkpoints\/v1\/my-project-[a-f0-9]{8}$/);
+    const cpBranch = `runlog/checkpoints/v1/${projectID}`;
+    expect(cpBranch).toMatch(/^runlog\/checkpoints\/v1\/my-project-[a-f0-9]{8}$/);
   });
 
   it('should produce correct namespaced sessions directory', () => {
     const projectID = getProjectID('/home/user/my-project');
-    const sessionsDir = `/opt/session-repo/entire-sessions/${projectID}`;
-    expect(sessionsDir).toMatch(/^\/opt\/session-repo\/entire-sessions\/my-project-[a-f0-9]{8}$/);
+    const sessionsDir = `/opt/session-repo/runlog-sessions/${projectID}`;
+    expect(sessionsDir).toMatch(/^\/opt\/session-repo\/runlog-sessions\/my-project-[a-f0-9]{8}$/);
   });
 
   it('should keep different projects isolated', () => {
     const id1 = getProjectID('/home/user/project-a');
     const id2 = getProjectID('/home/user/project-b');
 
-    const branch1 = `entire/checkpoints/v1/${id1}`;
-    const branch2 = `entire/checkpoints/v1/${id2}`;
+    const branch1 = `runlog/checkpoints/v1/${id1}`;
+    const branch2 = `runlog/checkpoints/v1/${id2}`;
 
     expect(branch1).not.toBe(branch2);
 
-    const dir1 = `entire-sessions/${id1}`;
-    const dir2 = `entire-sessions/${id2}`;
+    const dir1 = `runlog-sessions/${id1}`;
+    const dir2 = `runlog-sessions/${id2}`;
 
     expect(dir1).not.toBe(dir2);
   });

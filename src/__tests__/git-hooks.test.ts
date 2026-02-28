@@ -46,8 +46,8 @@ describe('Git Hooks (with commit-msg)', () => {
     const hooksDir = path.join(tmpDir, '.git', 'hooks');
     const commitMsgHook = fs.readFileSync(path.join(hooksDir, 'commit-msg'), 'utf-8');
 
-    expect(commitMsgHook).toContain('# Entire CLI hook');
-    expect(commitMsgHook).toContain('entire hooks git commit-msg "$1" || exit 1');
+    expect(commitMsgHook).toContain('# Runlog CLI hook');
+    expect(commitMsgHook).toContain('runlog hooks git commit-msg "$1" || exit 1');
     expect(commitMsgHook).toContain('strip trailer');
   });
 
@@ -69,7 +69,7 @@ describe('Git Hooks (with commit-msg)', () => {
 
     const hooksDir = path.join(tmpDir, '.git', 'hooks');
 
-    // All hooks should be removed (files deleted since they only had Entire content)
+    // All hooks should be removed (files deleted since they only had Runlog content)
     expect(fs.existsSync(path.join(hooksDir, 'prepare-commit-msg'))).toBe(false);
     expect(fs.existsSync(path.join(hooksDir, 'commit-msg'))).toBe(false);
     expect(fs.existsSync(path.join(hooksDir, 'post-commit'))).toBe(false);

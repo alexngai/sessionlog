@@ -17,7 +17,7 @@ export interface HookManager {
   name: string;
   /** Relative path that triggered detection (e.g., ".husky/") */
   configPath: string;
-  /** Whether the tool will overwrite Entire's hooks on reinstall */
+  /** Whether the tool will overwrite Runlog's hooks on reinstall */
   overwritesHooks: boolean;
 }
 
@@ -71,7 +71,7 @@ export function detectHookManagers(repoRoot: string): HookManager[] {
 /**
  * Build a warning string for detected hook managers.
  */
-export function hookManagerWarning(managers: HookManager[], entireExecutable = 'entire'): string {
+export function hookManagerWarning(managers: HookManager[], runlogExecutable = 'runlog'): string {
   if (managers.length === 0) return '';
 
   const lines: string[] = [];
@@ -80,24 +80,24 @@ export function hookManagerWarning(managers: HookManager[], entireExecutable = '
     if (m.overwritesHooks) {
       lines.push(`Warning: ${m.name} detected (${m.configPath})`);
       lines.push('');
-      lines.push(`  ${m.name} may overwrite hooks installed by Entire on npm install.`);
-      lines.push(`  To make Entire hooks permanent, add these lines to your ${m.name} hook files:`);
+      lines.push(`  ${m.name} may overwrite hooks installed by Runlog on npm install.`);
+      lines.push(`  To make Runlog hooks permanent, add these lines to your ${m.name} hook files:`);
       lines.push('');
 
       const hookDir = m.configPath;
       const hooks = [
         {
           name: 'prepare-commit-msg',
-          cmd: `${entireExecutable} hooks git prepare-commit-msg "$1" "$2" 2>/dev/null || true`,
+          cmd: `${runlogExecutable} hooks git prepare-commit-msg "$1" "$2" 2>/dev/null || true`,
         },
-        { name: 'commit-msg', cmd: `${entireExecutable} hooks git commit-msg "$1" || exit 1` },
+        { name: 'commit-msg', cmd: `${runlogExecutable} hooks git commit-msg "$1" || exit 1` },
         {
           name: 'post-commit',
-          cmd: `${entireExecutable} hooks git post-commit 2>/dev/null || true`,
+          cmd: `${runlogExecutable} hooks git post-commit 2>/dev/null || true`,
         },
         {
           name: 'pre-push',
-          cmd: `${entireExecutable} hooks git pre-push "$@" 2>/dev/null || true`,
+          cmd: `${runlogExecutable} hooks git pre-push "$@" 2>/dev/null || true`,
         },
       ];
 
@@ -109,7 +109,7 @@ export function hookManagerWarning(managers: HookManager[], entireExecutable = '
     } else {
       lines.push(`Note: ${m.name} detected (${m.configPath})`);
       lines.push('');
-      lines.push(`  If ${m.name} reinstalls hooks, run 'entire enable' to restore Entire's hooks.`);
+      lines.push(`  If ${m.name} reinstalls hooks, run 'runlog enable' to restore Runlog's hooks.`);
       lines.push('');
     }
   }

@@ -15,12 +15,12 @@ import * as readline from 'node:readline';
  * Detect if a controlling terminal (TTY) is available.
  *
  * Respects environment variables:
- * - `ENTIRE_TEST_TTY=1` forces TTY detection to true (for testing)
+ * - `RUNLOG_TEST_TTY=1` forces TTY detection to true (for testing)
  * - `GEMINI_CLI=1` forces TTY detection to false (Gemini runs non-interactively)
  */
 export function hasTTY(): boolean {
   // Check environment overrides
-  if (process.env.ENTIRE_TEST_TTY === '1') return true;
+  if (process.env.RUNLOG_TEST_TTY === '1') return true;
   if (process.env.GEMINI_CLI === '1') return false;
 
   // Try opening /dev/tty — this works even when stdin is redirected

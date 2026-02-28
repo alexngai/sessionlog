@@ -1,5 +1,5 @@
 /**
- * Tests for Entire Core Types
+ * Tests for Runlog Core Types
  */
 
 import { describe, it, expect } from 'vitest';
@@ -15,7 +15,7 @@ import {
   DEFAULT_AGENT_NAME,
 } from '../types.js';
 
-describe('Entire Types', () => {
+describe('Runlog Types', () => {
   describe('Agent Constants', () => {
     it('should have expected agent names', () => {
       expect(AGENT_NAMES.CLAUDE_CODE).toBe('claude-code');

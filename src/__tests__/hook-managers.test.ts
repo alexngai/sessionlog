@@ -109,13 +109,13 @@ describe('Hook Manager Detection', () => {
       ];
       const warning = hookManagerWarning(managers);
       expect(warning).toContain('Note: pre-commit detected');
-      expect(warning).toContain("run 'entire enable'");
+      expect(warning).toContain("run 'runlog enable'");
     });
 
     it('should use custom executable name', () => {
       const managers = [{ name: 'Husky', configPath: '.husky/', overwritesHooks: true }];
-      const warning = hookManagerWarning(managers, 'npx entire');
-      expect(warning).toContain('npx entire hooks git');
+      const warning = hookManagerWarning(managers, 'npx runlog');
+      expect(warning).toContain('npx runlog hooks git');
     });
   });
 });

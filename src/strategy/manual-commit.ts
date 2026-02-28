@@ -7,7 +7,7 @@
  * Data flow:
  * 1. InitializeSession -> Creates SessionState, calculates initial attribution
  * 2. SaveStep/SaveTaskStep -> Writes to shadow branch via CheckpointStore
- * 3. PrepareCommitMsg -> Adds Entire-Checkpoint trailer to commit messages
+ * 3. PrepareCommitMsg -> Adds Runlog-Checkpoint trailer to commit messages
  * 4. PostCommit -> Condenses session data, handles carry-forward
  * 5. PrePush -> Pushes metadata branch alongside user push
  */
@@ -445,7 +445,7 @@ export function createManualCommitStrategy(config: ManualCommitStrategyConfig): 
         step.taskDescription,
         shortToolUseID,
       );
-      const metadataDir = `.entire/metadata/${step.sessionID}/tasks/${step.toolUseID}`;
+      const metadataDir = `.runlog/metadata/${step.sessionID}/tasks/${step.toolUseID}`;
       const commitMsg = formatShadowCommit(messageSubject, metadataDir, step.sessionID);
 
       // Write temporary checkpoint
@@ -534,7 +534,7 @@ export function createManualCommitStrategy(config: ManualCommitStrategyConfig): 
       const worktreeRoot = await getWorktreeRoot(cwd);
 
       for (const entry of treeEntries) {
-        if (entry.name.startsWith('.entire/')) continue;
+        if (entry.name.startsWith('.runlog/')) continue;
 
         try {
           const content = await showFile(point.id, entry.name, cwd);
@@ -629,7 +629,7 @@ export function createManualCommitStrategy(config: ManualCommitStrategyConfig): 
     if (shadowExists) {
       // Read transcript from shadow branch metadata
       try {
-        const metadataDir = `.entire/metadata/${state.sessionID}`;
+        const metadataDir = `.runlog/metadata/${state.sessionID}`;
         const fullContent = await gitSafe(
           ['show', `refs/heads/${shadowBranch}:${metadataDir}/full.jsonl`],
           { cwd },
@@ -643,7 +643,7 @@ export function createManualCommitStrategy(config: ManualCommitStrategyConfig): 
 
       // Read prompts
       try {
-        const metadataDir = `.entire/metadata/${state.sessionID}`;
+        const metadataDir = `.runlog/metadata/${state.sessionID}`;
         const promptContent = await gitSafe(
           ['show', `refs/heads/${shadowBranch}:${metadataDir}/prompt.txt`],
           { cwd },
@@ -887,7 +887,7 @@ export function hasUserContent(message: string): boolean {
 }
 
 /**
- * Remove the Entire-Checkpoint trailer line from a commit message.
+ * Remove the Runlog-Checkpoint trailer line from a commit message.
  */
 export function stripCheckpointTrailer(message: string): string {
   const trailerPrefix = CheckpointTrailerKey + ':';

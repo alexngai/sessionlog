@@ -1,4 +1,4 @@
-# entire-cli
+# runlog
 
 TypeScript implementation of the [Entire CLI](https://github.com/entireio/cli) — a Git-integrated tool that captures AI agent sessions as searchable records within your repository.
 
@@ -8,7 +8,7 @@ This package provides the core library used to build session tracking, checkpoin
 
 - **Multi-agent support** — Claude Code, Cursor, Gemini CLI, and OpenCode
 - **Session lifecycle tracking** — automatic capture of prompts, responses, files modified, and token usage
-- **Git-native checkpoints** — temporary snapshots on shadow branches, permanent records on `entire/checkpoints/v1`
+- **Git-native checkpoints** — temporary snapshots on shadow branches, permanent records on `runlog/checkpoints/v1`
 - **Rewind** — restore code to any previous checkpoint
 - **Resume** — pick up agent sessions from any branch
 - **Secret redaction** — multi-layer detection (entropy analysis + 30+ patterns) before storing transcripts
@@ -20,27 +20,27 @@ This package provides the core library used to build session tracking, checkpoin
 **Global CLI (recommended for standalone use):**
 
 ```bash
-npm install -g entire-cli
+npm install -g runlog
 ```
 
-Then use the `entire` command directly:
+Then use the `runlog` command directly:
 
 ```bash
 cd your-project
-entire enable
-entire status
+runlog enable
+runlog status
 ```
 
 **As a project dependency:**
 
 ```bash
-npm install entire-cli
+npm install runlog
 ```
 
-**As a dev dependency (for tools/plugins that integrate with Entire):**
+**As a dev dependency (for tools/plugins that integrate with Runlog):**
 
 ```bash
-npm install --save-dev entire-cli
+npm install --save-dev runlog
 ```
 
 Requires Node.js >= 18 and Git.
@@ -54,9 +54,9 @@ import {
   status,
   listRewindPoints,
   rewindTo,
-} from 'entire-cli';
+} from 'runlog';
 
-// Enable Entire in a repository
+// Enable Runlog in a repository
 const result = await enable({ cwd: '/path/to/repo' });
 console.log(result.enabled); // true
 
@@ -78,7 +78,7 @@ await disable({ cwd: '/path/to/repo' });
 ## Architecture
 
 ```
-Your Branch                    entire/checkpoints/v1
+Your Branch                    runlog/checkpoints/v1
      │                                  │
      ▼                                  │
 [Base Commit]                           │
@@ -96,7 +96,7 @@ Your Branch                    entire/checkpoints/v1
      ▼
 ```
 
-Your active branch stays clean — all metadata is stored on the separate `entire/checkpoints/v1` branch.
+Your active branch stays clean — all metadata is stored on the separate `runlog/checkpoints/v1` branch.
 
 ## Key Concepts
 
@@ -110,8 +110,8 @@ All commands are exposed as async functions that return structured results:
 
 | Function | Purpose |
 |----------|---------|
-| `enable(options)` | Activate Entire in a repository |
-| `disable(options)` | Deactivate Entire hooks |
+| `enable(options)` | Activate Runlog in a repository |
+| `disable(options)` | Deactivate Runlog hooks |
 | `status(cwd)` | Get current session information |
 | `listRewindPoints(options)` | List available checkpoints |
 | `rewindTo(pointID, options)` | Restore to a previous checkpoint |
@@ -124,7 +124,7 @@ All commands are exposed as async functions that return structured results:
 ### Enable
 
 ```typescript
-import { enable } from 'entire-cli';
+import { enable } from 'runlog';
 
 const result = await enable({
   cwd: '/path/to/repo',
@@ -138,7 +138,7 @@ const result = await enable({
 ### Status
 
 ```typescript
-import { status, formatTokens } from 'entire-cli';
+import { status, formatTokens } from 'runlog';
 
 const info = await status('/path/to/repo');
 console.log(`Strategy: ${info.strategy}`);
@@ -154,7 +154,7 @@ for (const s of info.sessions) {
 ### Rewind
 
 ```typescript
-import { listRewindPoints, rewindTo } from 'entire-cli';
+import { listRewindPoints, rewindTo } from 'runlog';
 
 const points = await listRewindPoints({ cwd: '.', limit: 10 });
 for (const p of points) {
@@ -168,7 +168,7 @@ const result = await rewindTo(points[0].id);
 ### Explain
 
 ```typescript
-import { explainCommit, getCheckpointDetail } from 'entire-cli';
+import { explainCommit, getCheckpointDetail } from 'runlog';
 
 // Explain a specific commit
 const info = await explainCommit('HEAD');
@@ -185,7 +185,7 @@ const detail = await getCheckpointDetail('a3b2c4d5e6f7');
 ### Resume
 
 ```typescript
-import { discoverResumeInfo, listResumableBranches } from 'entire-cli';
+import { discoverResumeInfo, listResumableBranches } from 'runlog';
 
 // List branches with resumable sessions
 const branches = await listResumableBranches();
@@ -210,7 +210,7 @@ import {
   getAgent,
   detectAgents,
   createClaudeCodeAgent,
-} from 'entire-cli';
+} from 'runlog';
 
 // Agents auto-register on import. Detect installed agents:
 const agents = await detectAgents('/path/to/repo');
@@ -230,7 +230,7 @@ if (claude) {
 | Claude Code | `claude-code` | `.claude/settings.json` |
 | Cursor | `cursor` | `.cursor/hooks.json` |
 | Gemini CLI | `gemini` | `.gemini/settings.json` |
-| OpenCode | `opencode` | `.opencode/plugins/entire.ts` |
+| OpenCode | `opencode` | `.opencode/plugins/runlog.ts` |
 
 ## Strategy Engine
 
@@ -241,7 +241,7 @@ import {
   createManualCommitStrategy,
   createSessionStore,
   createCheckpointStore,
-} from 'entire-cli';
+} from 'runlog';
 
 const strategy = createManualCommitStrategy({
   sessionStore: createSessionStore('/path/to/repo'),
@@ -269,7 +269,7 @@ import {
   createLifecycleHandler,
   createSessionStore,
   createCheckpointStore,
-} from 'entire-cli';
+} from 'runlog';
 
 const handler = createLifecycleHandler({
   sessionStore: createSessionStore(),
@@ -285,7 +285,7 @@ await handler.dispatch(agent, event);
 Redact secrets before storing transcripts:
 
 ```typescript
-import { redactJSONL, detectSecrets, shannonEntropy } from 'entire-cli';
+import { redactJSONL, detectSecrets, shannonEntropy } from 'runlog';
 
 // Redact a JSONL transcript buffer
 const safe = redactJSONL(transcriptBuffer);
@@ -299,15 +299,15 @@ const entropy = shannonEntropy('AKIAIOSFODNN7EXAMPLE');
 
 ## Configuration
 
-Settings stored in `.entire/`:
+Settings stored in `.runlog/`:
 
 | File | Purpose |
 |------|---------|
-| `.entire/settings.json` | Team-shared, version-controlled |
-| `.entire/settings.local.json` | Personal overrides, gitignored |
+| `.runlog/settings.json` | Team-shared, version-controlled |
+| `.runlog/settings.local.json` | Personal overrides, gitignored |
 
 ```typescript
-import { loadSettings, saveProjectSettings, isEnabled } from 'entire-cli';
+import { loadSettings, saveProjectSettings, isEnabled } from 'runlog';
 
 const settings = await loadSettings('/path/to/repo');
 // { enabled, strategy, logLevel, skipPushSessions, telemetryEnabled, summarizationEnabled }
@@ -321,7 +321,7 @@ const enabled = await isEnabled('/path/to/repo');
 
 | Option | Type | Default | Purpose |
 |--------|------|---------|---------|
-| `enabled` | boolean | `false` | Toggle Entire functionality |
+| `enabled` | boolean | `false` | Toggle Runlog functionality |
 | `strategy` | string | `'manual-commit'` | Checkpoint strategy |
 | `logLevel` | string | `'warn'` | Log verbosity (debug/info/warn/error) |
 | `skipPushSessions` | boolean | `false` | Disable auto-push of checkpoints branch |
@@ -337,7 +337,7 @@ import {
   buildCondensedTranscript,
   buildSummarizationPrompt,
   createClaudeGenerator,
-} from 'entire-cli';
+} from 'runlog';
 
 // Build a condensed transcript from raw agent output
 const condensed = buildCondensedTranscript(entries);
@@ -350,7 +350,7 @@ const summary = await generator.generate({ condensed, prompt: 'Summarize this se
 
 ## Git Worktrees
 
-Entire integrates with git worktrees, providing independent session tracking per worktree without conflicts.
+Runlog integrates with git worktrees, providing independent session tracking per worktree without conflicts.
 
 ## Development
 
@@ -379,7 +379,7 @@ npm run format
 | Problem | Fix |
 |---------|-----|
 | "Not a git repository" | Navigate to a Git repository first |
-| "Entire is disabled" | Run `enable()` |
+| "Runlog is disabled" | Run `enable()` |
 | "No rewind points found" | Work with your agent and commit changes |
 | "shadow branch conflict" | Run `reset({ force: true })` |
 

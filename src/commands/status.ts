@@ -1,11 +1,11 @@
 /**
  * Status Command
  *
- * Shows the current Entire setup status, active sessions,
+ * Shows the current Runlog setup status, active sessions,
  * and configuration.
  */
 
-import { type EntireSettings, CHECKPOINTS_BRANCH } from '../types.js';
+import { type RunlogSettings, CHECKPOINTS_BRANCH } from '../types.js';
 import {
   isGitRepository,
   getWorktreeRoot,
@@ -27,7 +27,7 @@ import { hasHookSupport } from '../agent/types.js';
 // ============================================================================
 
 export interface StatusResult {
-  /** Whether Entire is set up and enabled */
+  /** Whether Runlog is set up and enabled */
   enabled: boolean;
 
   /** Current strategy */
@@ -49,7 +49,7 @@ export interface StatusResult {
   gitHooksInstalled: boolean;
 
   /** Effective settings */
-  settings: EntireSettings;
+  settings: RunlogSettings;
 }
 
 export interface SessionStatus {
@@ -71,7 +71,7 @@ export interface SessionStatus {
 // ============================================================================
 
 /**
- * Get the current status of Entire
+ * Get the current status of Runlog
  */
 export async function status(cwd?: string): Promise<StatusResult> {
   const isRepo = await isGitRepository(cwd);

@@ -147,9 +147,9 @@ describe('OpenCode Agent', () => {
       const count = await agent.installHooks(tmpDir);
       expect(count).toBe(5);
 
-      const pluginPath = path.join(tmpDir, '.opencode', 'plugins', 'entire.ts');
+      const pluginPath = path.join(tmpDir, '.opencode', 'plugins', 'runlog.ts');
       const content = fs.readFileSync(pluginPath, 'utf-8');
-      expect(content).toContain('entire enable --agent opencode');
+      expect(content).toContain('runlog enable --agent opencode');
     });
 
     it('should be idempotent', async () => {

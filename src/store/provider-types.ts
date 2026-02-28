@@ -1,12 +1,12 @@
 /**
- * Entire Provider Types
+ * Runlog Provider Types
  *
- * These types define the public interface for accessing Entire session
- * and checkpoint data. They are the contract between the Entire module
+ * These types define the public interface for accessing Runlog session
+ * and checkpoint data. They are the contract between the Runlog module
  * and external consumers (providers, daemon, etc.).
  *
  * This file is the canonical source of truth — external code should
- * import these types from the entire package rather than redefining them.
+ * import these types from the runlog package rather than redefining them.
  */
 
 // ============================================================================
@@ -14,9 +14,9 @@
 // ============================================================================
 
 /**
- * Entire session state (from .git/entire-sessions/<id>.json)
+ * Runlog session state (from .git/runlog-sessions/<id>.json)
  */
-export interface EntireSession {
+export interface RunlogSession {
   id: string;
   agent: string;
   phase: 'ACTIVE' | 'IDLE' | 'ENDED';
@@ -25,18 +25,18 @@ export interface EntireSession {
   startedAt?: string;
   endedAt?: string;
   checkpoints?: string[];
-  tokenUsage?: EntireTokenUsage;
+  tokenUsage?: RunlogTokenUsage;
   filesTouched?: string[];
   summary?: string;
 
   /** Skills used during this session (populated by SkillTracker) */
-  skillsUsed?: EntireSkillUsage;
+  skillsUsed?: RunlogSkillUsage;
 }
 
 /**
  * Skill usage data embedded in session metadata
  */
-export interface EntireSkillUsage {
+export interface RunlogSkillUsage {
   /** Distinct skill names used */
   skills: string[];
 
@@ -55,9 +55,9 @@ export interface EntireSkillUsage {
 // ============================================================================
 
 /**
- * Entire checkpoint metadata
+ * Runlog checkpoint metadata
  */
-export interface EntireCheckpoint {
+export interface RunlogCheckpoint {
   id: string;
   sessionId?: string;
   commitHash?: string;
@@ -66,7 +66,7 @@ export interface EntireCheckpoint {
   filesModified?: string[];
   filesNew?: string[];
   filesDeleted?: string[];
-  tokenUsage?: EntireTokenUsage;
+  tokenUsage?: RunlogTokenUsage;
   context?: string;
 }
 
@@ -77,7 +77,7 @@ export interface EntireCheckpoint {
 /**
  * Token usage statistics (provider-facing, simplified)
  */
-export interface EntireTokenUsage {
+export interface RunlogTokenUsage {
   input?: number;
   output?: number;
   cache?: number;
@@ -88,12 +88,12 @@ export interface EntireTokenUsage {
 // ============================================================================
 
 /**
- * Interface for accessing Entire data (CLI or direct reads)
+ * Interface for accessing Runlog data (CLI or direct reads)
  */
-export interface EntireStore {
-  getSession(id: string): Promise<EntireSession | null>;
-  listSessions(): Promise<EntireSession[]>;
-  getCheckpoint(id: string): Promise<EntireCheckpoint | null>;
-  listCheckpoints(): Promise<EntireCheckpoint[]>;
-  search(query: string): Promise<Array<EntireSession | EntireCheckpoint>>;
+export interface RunlogStore {
+  getSession(id: string): Promise<RunlogSession | null>;
+  listSessions(): Promise<RunlogSession[]>;
+  getCheckpoint(id: string): Promise<RunlogCheckpoint | null>;
+  listCheckpoints(): Promise<RunlogCheckpoint[]>;
+  search(query: string): Promise<Array<RunlogSession | RunlogCheckpoint>>;
 }

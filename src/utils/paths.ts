@@ -1,21 +1,21 @@
 /**
  * Path Classification Helpers
  *
- * Utilities for classifying and normalizing paths within the Entire system.
+ * Utilities for classifying and normalizing paths within the Runlog system.
  *
  * Ported from Go: paths/paths.go
  */
 
 import * as path from 'node:path';
-import { ENTIRE_DIR } from '../types.js';
+import { RUNLOG_DIR } from '../types.js';
 
 /**
- * Returns true if the path is part of Entire's infrastructure
- * (i.e., inside the `.entire/` directory).
+ * Returns true if the path is part of Runlog's infrastructure
+ * (i.e., inside the `.runlog/` directory).
  */
 export function isInfrastructurePath(filePath: string): boolean {
   const normalized = filePath.replace(/\\/g, '/');
-  return normalized === ENTIRE_DIR || normalized.startsWith(ENTIRE_DIR + '/');
+  return normalized === RUNLOG_DIR || normalized.startsWith(RUNLOG_DIR + '/');
 }
 
 /**

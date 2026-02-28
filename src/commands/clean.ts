@@ -1,13 +1,13 @@
 /**
  * Clean Command
  *
- * Removes orphaned Entire data: shadow branches, stale session files,
+ * Removes orphaned Runlog data: shadow branches, stale session files,
  * and temporary files that are no longer referenced.
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { ENTIRE_TMP_DIR, SHADOW_BRANCH_PREFIX, CHECKPOINTS_BRANCH } from '../types.js';
+import { RUNLOG_TMP_DIR, SHADOW_BRANCH_PREFIX, CHECKPOINTS_BRANCH } from '../types.js';
 import { getWorktreeRoot, listBranches, deleteBranch } from '../git-operations.js';
 import { createSessionStore } from '../store/session-store.js';
 
@@ -75,7 +75,7 @@ export async function findOrphaned(cwd?: string): Promise<CleanupItem[]> {
   // 2. Orphaned temp files
   try {
     const root = await getWorktreeRoot(cwd);
-    const tmpDir = path.join(root, ENTIRE_TMP_DIR);
+    const tmpDir = path.join(root, RUNLOG_TMP_DIR);
 
     const files = await fs.promises.readdir(tmpDir).catch(() => []);
     for (const file of files) {

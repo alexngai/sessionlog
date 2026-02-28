@@ -1,7 +1,7 @@
 /**
  * Session Store
  *
- * Manages session state files in .git/entire-sessions/.
+ * Manages session state files in .git/runlog-sessions/.
  * Each active session has a JSON state file that tracks
  * its lifecycle, files touched, checkpoints, and token usage.
  */
@@ -47,9 +47,9 @@ export interface SessionStore {
 /**
  * Create a session store.
  *
- * @param cwd - The project working directory (used to locate .git/entire-sessions/)
+ * @param cwd - The project working directory (used to locate .git/runlog-sessions/)
  * @param sessionsDir - Optional explicit directory for session state files.
- *   When provided, session files are stored here instead of .git/entire-sessions/.
+ *   When provided, session files are stored here instead of .git/runlog-sessions/.
  *   This is used when a separate session repo is configured.
  */
 export function createSessionStore(cwd?: string, sessionsDir?: string): SessionStore {

@@ -1,5 +1,5 @@
 {
-  "name": "entire-cli",
+  "name": "runlog",
   "version": "0.0.3",
   "description": "Session tracking and checkpoint management for AI coding agents",
   "type": "module",
@@ -13,7 +13,7 @@
     }
   },
   "bin": {
-    "entire": "./dist/cli.js"
+    "runlog": "./dist/cli.js"
   },
   "files": [
     "dist"
@@ -34,7 +34,7 @@
     "prepare": "husky"
   },
   "keywords": [
-    "entire",
+    "runlog",
     "git",
     "session-tracking",
     "checkpoints",

@@ -1,7 +1,7 @@
 /**
  * Claude Code Agent
  *
- * Implementation of the Entire agent interface for Anthropic's Claude Code.
+ * Implementation of the Runlog agent interface for Anthropic's Claude Code.
  * Handles JSONL transcript format, Claude-specific hook installation,
  * and session lifecycle management.
  */
@@ -57,7 +57,7 @@ const FILE_MODIFICATION_TOOLS = new Set([
 ]);
 
 /** Deny rule to prevent agents from reading metadata */
-const METADATA_DENY_RULE = 'Read(./.entire/metadata/**)';
+const METADATA_DENY_RULE = 'Read(./.runlog/metadata/**)';
 
 // ============================================================================
 // Transcript Types (JSONL)
@@ -290,26 +290,26 @@ class ClaudeCodeAgent
       const existing = settings.hooks[settingsKey] ?? [];
 
       if (force) {
-        // Remove existing entire hooks
+        // Remove existing runlog hooks
         const filtered = existing.filter(
-          (m) => !m.hooks.some((h) => h.command.includes('entire ')),
+          (m) => !m.hooks.some((h) => h.command.includes('runlog ')),
         );
         settings.hooks[settingsKey] = filtered;
       }
 
       // Check if already installed
-      const hasEntireHook = (settings.hooks[settingsKey] ?? []).some((m) =>
-        m.hooks.some((h) => h.command.includes('entire ')),
+      const hasRunlogHook = (settings.hooks[settingsKey] ?? []).some((m) =>
+        m.hooks.some((h) => h.command.includes('runlog ')),
       );
 
-      if (!hasEntireHook) {
+      if (!hasRunlogHook) {
         const matchers = settings.hooks[settingsKey] ?? [];
         matchers.push({
           matcher: '',
           hooks: [
             {
               type: 'command',
-              command: `entire hooks claude-code ${hookName}`,
+              command: `runlog hooks claude-code ${hookName}`,
             },
           ],
         });
@@ -323,23 +323,23 @@ class ClaudeCodeAgent
 
       if (force) {
         const filtered = existing.filter(
-          (m) => !(m.matcher === matcher && m.hooks.some((h) => h.command.includes('entire '))),
+          (m) => !(m.matcher === matcher && m.hooks.some((h) => h.command.includes('runlog '))),
         );
         settings.hooks[settingsKey] = filtered;
       }
 
-      const hasEntireHook = (settings.hooks[settingsKey] ?? []).some(
-        (m) => m.matcher === matcher && m.hooks.some((h) => h.command.includes('entire ')),
+      const hasRunlogHook = (settings.hooks[settingsKey] ?? []).some(
+        (m) => m.matcher === matcher && m.hooks.some((h) => h.command.includes('runlog ')),
       );
 
-      if (!hasEntireHook) {
+      if (!hasRunlogHook) {
         const matchers = settings.hooks[settingsKey] ?? [];
         matchers.push({
           matcher,
           hooks: [
             {
               type: 'command',
-              command: `entire hooks claude-code ${hookName}`,
+              command: `runlog hooks claude-code ${hookName}`,
             },
           ],
         });
@@ -378,7 +378,7 @@ class ClaudeCodeAgent
           if (!matchers) continue;
 
           settings.hooks[key] = matchers.filter(
-            (m) => !m.hooks.some((h) => h.command.includes('entire ')),
+            (m) => !m.hooks.some((h) => h.command.includes('runlog ')),
           );
 
           if (settings.hooks[key]!.length === 0) {
@@ -421,7 +421,7 @@ class ClaudeCodeAgent
 
       // Check for at least the session-start hook
       const sessionStart = settings.hooks.SessionStart ?? [];
-      return sessionStart.some((m) => m.hooks.some((h) => h.command.includes('entire ')));
+      return sessionStart.some((m) => m.hooks.some((h) => h.command.includes('runlog ')));
     } catch {
       return false;
     }

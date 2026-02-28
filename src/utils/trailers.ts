@@ -1,7 +1,7 @@
 /**
  * Commit Message Trailers
  *
- * Parsing and formatting for Entire commit message trailers.
+ * Parsing and formatting for Runlog commit message trailers.
  * Trailers are key-value metadata appended to git commit messages
  * following the git trailer convention (key: value format after a blank line).
  */
@@ -12,16 +12,16 @@ import { CHECKPOINT_ID_PATTERN, type CheckpointID } from '../types.js';
 // Trailer Key Constants
 // ============================================================================
 
-export const MetadataTrailerKey = 'Entire-Metadata';
-export const MetadataTaskTrailerKey = 'Entire-Metadata-Task';
-export const StrategyTrailerKey = 'Entire-Strategy';
+export const MetadataTrailerKey = 'Runlog-Metadata';
+export const MetadataTaskTrailerKey = 'Runlog-Metadata-Task';
+export const StrategyTrailerKey = 'Runlog-Strategy';
 export const BaseCommitTrailerKey = 'Base-Commit';
-export const SessionTrailerKey = 'Entire-Session';
-export const CondensationTrailerKey = 'Entire-Condensation';
-export const SourceRefTrailerKey = 'Entire-Source-Ref';
-export const CheckpointTrailerKey = 'Entire-Checkpoint';
+export const SessionTrailerKey = 'Runlog-Session';
+export const CondensationTrailerKey = 'Runlog-Condensation';
+export const SourceRefTrailerKey = 'Runlog-Source-Ref';
+export const CheckpointTrailerKey = 'Runlog-Checkpoint';
 export const EphemeralBranchTrailerKey = 'Ephemeral-branch';
-export const AgentTrailerKey = 'Entire-Agent';
+export const AgentTrailerKey = 'Runlog-Agent';
 
 // ============================================================================
 // Pre-compiled Regex Patterns

@@ -14,7 +14,7 @@ import { listBranches, deleteBranch } from '../git-operations.js';
 /** Worktree ID hash length (6 hex characters) */
 const WORKTREE_ID_HASH_LENGTH = 6;
 
-/** Pattern for shadow branches: entire/<hex7+>(-<hex6+>)? */
+/** Pattern for shadow branches: runlog/<hex7+>(-<hex6+>)? */
 const SHADOW_BRANCH_PATTERN = new RegExp(
   `^${SHADOW_BRANCH_PREFIX.replace('/', '\\/')}[0-9a-f]{${SHADOW_BRANCH_HASH_LENGTH},}(-[0-9a-f]{${WORKTREE_ID_HASH_LENGTH},})?$`,
 );
@@ -32,7 +32,7 @@ export function hashWorktreeID(worktreeID: string): string {
 
 /**
  * Returns the shadow branch name for a base commit hash and worktree identifier.
- * Format: entire/<commit[:7]>-<hash(worktreeID)[:6]>
+ * Format: runlog/<commit[:7]>-<hash(worktreeID)[:6]>
  */
 export function shadowBranchNameForCommit(baseCommit: string, worktreeID?: string): string {
   const commitPart = baseCommit.slice(0, SHADOW_BRANCH_HASH_LENGTH);
@@ -69,7 +69,7 @@ export function parseShadowBranchName(
 
 /**
  * Returns true if the branch name matches the shadow branch pattern.
- * The "entire/checkpoints/v1" branch is NOT a shadow branch.
+ * The "runlog/checkpoints/v1" branch is NOT a shadow branch.
  */
 export function isShadowBranch(branchName: string): boolean {
   if (branchName === CHECKPOINTS_BRANCH) return false;

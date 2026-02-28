@@ -97,7 +97,7 @@ export async function isInsideWorktree(cwd?: string): Promise<boolean> {
 // ============================================================================
 
 /**
- * Ensure the metadata branch (entire/checkpoints/v1) exists.
+ * Ensure the metadata branch (runlog/checkpoints/v1) exists.
  * Creates it with an initial empty-tree commit if it doesn't exist.
  */
 export async function ensureMetadataBranch(cwd?: string): Promise<void> {
@@ -111,7 +111,7 @@ export async function ensureMetadataBranch(cwd?: string): Promise<void> {
   const commitHash = await commitTree(
     emptyTree,
     null,
-    'Initialize Entire checkpoints branch',
+    'Initialize Runlog checkpoints branch',
     author,
     cwd,
   );

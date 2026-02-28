@@ -232,7 +232,7 @@ describe('IDE Tags', () => {
 describe('Trailers', () => {
   describe('parseCheckpoint', () => {
     it('should parse checkpoint from trailer', () => {
-      const message = 'Some commit\n\nEntire-Checkpoint: abc123def456';
+      const message = 'Some commit\n\nRunlog-Checkpoint: abc123def456';
       const [cpID, found] = parseCheckpoint(message);
       expect(found).toBe(true);
       expect(cpID).toBe('abc123def456');
@@ -247,7 +247,7 @@ describe('Trailers', () => {
 
   describe('parseAllSessions', () => {
     it('should parse session IDs from trailers', () => {
-      const message = 'Commit\n\nEntire-Session: session-1\nEntire-Session: session-2';
+      const message = 'Commit\n\nRunlog-Session: session-1\nRunlog-Session: session-2';
       const sessions = parseAllSessions(message);
       expect(sessions).toContain('session-1');
       expect(sessions).toContain('session-2');
@@ -261,7 +261,7 @@ describe('Trailers', () => {
 
   describe('parseStrategy', () => {
     it('should parse strategy from trailer', () => {
-      const message = 'Commit\n\nEntire-Strategy: manual';
+      const message = 'Commit\n\nRunlog-Strategy: manual';
       const [strategy, found] = parseStrategy(message);
       expect(found).toBe(true);
       expect(strategy).toBe('manual');
@@ -278,21 +278,21 @@ describe('Trailers', () => {
     it('should format strategy trailer', () => {
       const result = formatStrategy('Fix bug', 'manual');
       expect(result).toContain('Fix bug');
-      expect(result).toContain('Entire-Strategy: manual');
+      expect(result).toContain('Runlog-Strategy: manual');
     });
 
     it('should format checkpoint trailer', () => {
       const result = formatCheckpoint('Add feature', 'abc123def456' as any);
       expect(result).toContain('Add feature');
-      expect(result).toContain('Entire-Checkpoint: abc123def456');
+      expect(result).toContain('Runlog-Checkpoint: abc123def456');
     });
 
     it('should format shadow commit with session', () => {
       const result = formatShadowCommit('Update code', 'meta/dir', 'session-1');
       expect(result).toContain('Update code');
-      expect(result).toContain('Entire-Metadata: meta/dir');
-      expect(result).toContain('Entire-Session: session-1');
-      expect(result).toContain('Entire-Strategy: manual-commit');
+      expect(result).toContain('Runlog-Metadata: meta/dir');
+      expect(result).toContain('Runlog-Session: session-1');
+      expect(result).toContain('Runlog-Strategy: manual-commit');
     });
   });
 });
