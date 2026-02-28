@@ -13,6 +13,7 @@ import {
   refExists,
   initSessionRepo,
   resolveSessionRepoPath,
+  getProjectID,
 } from '../git-operations.js';
 import { loadSettings } from '../config.js';
 import { createSessionStore } from '../store/session-store.js';
@@ -96,18 +97,21 @@ export async function status(cwd?: string): Promise<StatusResult> {
   // Resolve session repo if configured
   let sessionRepoCwd: string | undefined;
   let sessionsDir: string | undefined;
+  let cpBranch = CHECKPOINTS_BRANCH;
   if (settings.sessionRepoPath) {
     try {
+      const projectID = getProjectID(root);
       const resolved = resolveSessionRepoPath(settings.sessionRepoPath, root);
       sessionRepoCwd = await initSessionRepo(resolved);
-      sessionsDir = `${sessionRepoCwd}/${SESSION_DIR_NAME}`;
+      sessionsDir = `${sessionRepoCwd}/${SESSION_DIR_NAME}/${projectID}`;
+      cpBranch = `${CHECKPOINTS_BRANCH}/${projectID}`;
     } catch {
       // Fall back to project repo if session repo can't be initialized
     }
   }
 
   const checkpointsCwd = sessionRepoCwd ?? cwd;
-  const hasCheckpoints = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, checkpointsCwd);
+  const hasCheckpoints = await refExists(`refs/heads/${cpBranch}`, checkpointsCwd);
 
   // Detect agents with hooks
   const agents = await detectAgents(cwd);

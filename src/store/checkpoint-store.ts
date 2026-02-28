@@ -105,10 +105,19 @@ export interface CheckpointStore {
  *   When provided, the `entire/checkpoints/v1` branch and its data are stored
  *   in this repo instead of the project repo. Shadow branches remain in the
  *   project repo since they reference the project's git objects.
+ * @param checkpointsBranch - Optional override for the checkpoints branch name.
+ *   Defaults to `entire/checkpoints/v1`. When multiple projects share a session
+ *   repo, each project uses a unique branch like `entire/checkpoints/v1/<projectID>`.
  */
-export function createCheckpointStore(cwd?: string, sessionRepoCwd?: string): CheckpointStore {
+export function createCheckpointStore(
+  cwd?: string,
+  sessionRepoCwd?: string,
+  checkpointsBranch?: string,
+): CheckpointStore {
   /** Directory for committed checkpoint operations (separate repo or project repo) */
   const committedCwd = sessionRepoCwd ?? cwd;
+  /** Branch name for committed checkpoints */
+  const cpBranch = checkpointsBranch ?? CHECKPOINTS_BRANCH;
 
   function getShadowBranchName(baseCommit: string, worktreeID?: string): string {
     const shortHash = baseCommit.slice(0, SHADOW_BRANCH_HASH_LENGTH);
@@ -243,7 +252,7 @@ export function createCheckpointStore(cwd?: string, sessionRepoCwd?: string): Ch
 
     async writeCommitted(opts: WriteCommittedOptions): Promise<void> {
       const checkpointPath = checkpointIDPath(opts.checkpointID);
-      const branchRef = `refs/heads/${CHECKPOINTS_BRANCH}`;
+      const branchRef = `refs/heads/${cpBranch}`;
 
       // Committed checkpoints go to the session repo (or project repo if no session repo)
       const targetCwd = committedCwd;
@@ -254,8 +263,8 @@ export function createCheckpointStore(cwd?: string, sessionRepoCwd?: string): Ch
       let baseTree: string | null = null;
 
       if (branchExists) {
-        parentHash = await git(['rev-parse', CHECKPOINTS_BRANCH], { cwd: targetCwd });
-        baseTree = await getTreeHash(CHECKPOINTS_BRANCH, targetCwd);
+        parentHash = await git(['rev-parse', cpBranch], { cwd: targetCwd });
+        baseTree = await getTreeHash(cpBranch, targetCwd);
       }
 
       // Build session directory content
@@ -339,11 +348,7 @@ export function createCheckpointStore(cwd?: string, sessionRepoCwd?: string): Ch
 
       if (baseTree) {
         // Read existing shard if present
-        const existingShardEntries = await lsTree(
-          `${CHECKPOINTS_BRANCH}:${shardDir}`,
-          undefined,
-          targetCwd,
-        );
+        const existingShardEntries = await lsTree(`${cpBranch}:${shardDir}`, undefined, targetCwd);
         if (existingShardEntries.length > 0) {
           shardSubtreeEntries = existingShardEntries.filter((e) => e.name !== checkpointDir);
         }
@@ -361,7 +366,7 @@ export function createCheckpointStore(cwd?: string, sessionRepoCwd?: string): Ch
       let rootEntries: Array<{ mode: string; type: string; hash: string; name: string }> = [];
 
       if (baseTree) {
-        const existingRoot = await lsTree(CHECKPOINTS_BRANCH, undefined, targetCwd);
+        const existingRoot = await lsTree(cpBranch, undefined, targetCwd);
         rootEntries = existingRoot.filter((e) => e.name !== shardDir);
       }
       rootEntries.push({ mode: '040000', type: 'tree', hash: shardTree, name: shardDir });
@@ -375,23 +380,19 @@ export function createCheckpointStore(cwd?: string, sessionRepoCwd?: string): Ch
 
       // Update branch ref
       if (branchExists) {
-        await updateRef(CHECKPOINTS_BRANCH, commitHash, targetCwd);
+        await updateRef(cpBranch, commitHash, targetCwd);
       } else {
-        await git(['branch', CHECKPOINTS_BRANCH, commitHash], { cwd: targetCwd });
+        await git(['branch', cpBranch, commitHash], { cwd: targetCwd });
       }
     },
 
     async readCommitted(checkpointID: CheckpointID): Promise<CheckpointSummary | null> {
-      const exists = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, committedCwd);
+      const exists = await refExists(`refs/heads/${cpBranch}`, committedCwd);
       if (!exists) return null;
 
       const checkpointPath = checkpointIDPath(checkpointID);
       try {
-        const content = await showFile(
-          CHECKPOINTS_BRANCH,
-          `${checkpointPath}/metadata.json`,
-          committedCwd,
-        );
+        const content = await showFile(cpBranch, `${checkpointPath}/metadata.json`, committedCwd);
         return JSON.parse(content) as CheckpointSummary;
       } catch {
         return null;
@@ -412,10 +413,10 @@ export function createCheckpointStore(cwd?: string, sessionRepoCwd?: string): Ch
 
       try {
         const [metadataStr, transcript, prompts, context] = await Promise.all([
-          showFile(CHECKPOINTS_BRANCH, `${sessionPath}/metadata.json`, committedCwd),
-          showFile(CHECKPOINTS_BRANCH, `${sessionPath}/full.jsonl`, committedCwd),
-          showFile(CHECKPOINTS_BRANCH, `${sessionPath}/prompt.txt`, committedCwd),
-          showFile(CHECKPOINTS_BRANCH, `${sessionPath}/context.md`, committedCwd),
+          showFile(cpBranch, `${sessionPath}/metadata.json`, committedCwd),
+          showFile(cpBranch, `${sessionPath}/full.jsonl`, committedCwd),
+          showFile(cpBranch, `${sessionPath}/prompt.txt`, committedCwd),
+          showFile(cpBranch, `${sessionPath}/context.md`, committedCwd),
         ]);
 
         return {
@@ -430,15 +431,11 @@ export function createCheckpointStore(cwd?: string, sessionRepoCwd?: string): Ch
     },
 
     async listCommitted(limit = 20): Promise<CheckpointSummary[]> {
-      const exists = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, committedCwd);
+      const exists = await refExists(`refs/heads/${cpBranch}`, committedCwd);
       if (!exists) return [];
 
       // Get recent commits on the metadata branch
-      const logOutput = await log(
-        CHECKPOINTS_BRANCH,
-        { maxCount: limit, format: '%H %s' },
-        committedCwd,
-      );
+      const logOutput = await log(cpBranch, { maxCount: limit, format: '%H %s' }, committedCwd);
 
       if (!logOutput) return [];
 

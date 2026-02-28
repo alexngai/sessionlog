@@ -8,6 +8,7 @@
 
 import { execFile, type ExecFileOptions } from 'node:child_process';
 import { promisify } from 'node:util';
+import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -188,6 +189,17 @@ export async function initSessionRepo(repoPath: string): Promise<string> {
  */
 export function resolveSessionRepoPath(sessionRepoPath: string, projectRoot: string): string {
   return path.resolve(projectRoot, sessionRepoPath);
+}
+
+/**
+ * Derive a stable, short project identifier from the project's worktree root.
+ * This is used to namespace data when multiple projects share a session repo.
+ *
+ * Uses the first 12 hex chars of a SHA-256 hash of the absolute worktree root path.
+ */
+export function getProjectID(projectRoot: string): string {
+  const absRoot = path.resolve(projectRoot);
+  return crypto.createHash('sha256').update(absRoot).digest('hex').slice(0, 12);
 }
 
 // ============================================================================

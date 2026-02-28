@@ -28,8 +28,13 @@ import { createSessionStore } from './store/session-store.js';
 import { createCheckpointStore } from './store/checkpoint-store.js';
 import { createManualCommitStrategy } from './strategy/manual-commit.js';
 import { getVersion } from './index.js';
-import { getWorktreeRoot, initSessionRepo, resolveSessionRepoPath } from './git-operations.js';
-import { SESSION_DIR_NAME } from './types.js';
+import {
+  getWorktreeRoot,
+  initSessionRepo,
+  resolveSessionRepoPath,
+  getProjectID,
+} from './git-operations.js';
+import { CHECKPOINTS_BRANCH, SESSION_DIR_NAME } from './types.js';
 
 // ============================================================================
 // Argument Parsing Helpers
@@ -329,18 +334,23 @@ async function cmdHooksGit(args: string[]): Promise<void> {
   const settings = await loadSettings();
   let sessionRepoCwd: string | undefined;
   let sessionsDir: string | undefined;
+  let checkpointsBranch: string | undefined;
 
   if (settings.sessionRepoPath) {
     const root = await getWorktreeRoot();
+    const projectID = getProjectID(root);
     const resolved = resolveSessionRepoPath(settings.sessionRepoPath, root);
     sessionRepoCwd = await initSessionRepo(resolved);
-    sessionsDir = `${sessionRepoCwd}/${SESSION_DIR_NAME}`;
+    // Namespace by project so multiple repos can share one session repo
+    sessionsDir = `${sessionRepoCwd}/${SESSION_DIR_NAME}/${projectID}`;
+    checkpointsBranch = `${CHECKPOINTS_BRANCH}/${projectID}`;
   }
 
   const strategy = createManualCommitStrategy({
     sessionStore: createSessionStore(undefined, sessionsDir),
-    checkpointStore: createCheckpointStore(undefined, sessionRepoCwd),
+    checkpointStore: createCheckpointStore(undefined, sessionRepoCwd, checkpointsBranch),
     sessionRepoCwd,
+    checkpointsBranch,
   });
 
   switch (hookName) {

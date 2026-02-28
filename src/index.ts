@@ -119,6 +119,7 @@ export {
   atomicWriteFile,
   initSessionRepo,
   resolveSessionRepoPath,
+  getProjectID,
   GitError,
   type GitAuthor,
   type GitExecOptions,
