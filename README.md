@@ -120,6 +120,7 @@ All commands are exposed as async functions that return structured results:
 | `reset(options)` | Clear shadow branch and session state |
 | `explainCommit(ref, options)` | Get session details for a commit |
 | `discoverResumeInfo(branch)` | Find resumable sessions on a branch |
+| `setupCcweb(options)` | Configure for Claude Code Web sessions |
 
 ### Enable
 
@@ -199,6 +200,70 @@ if (info.success && info.info) {
   console.log(`Resume command: ${info.info.resumeCommand}`);
 }
 ```
+
+### Claude Code Web
+
+Configure a repository for automatic sessionlog setup in [Claude Code Web](https://claude.ai/code) sessions.
+
+**The problem:** Claude Code Web (ccweb) sessions start with a fresh environment — sessionlog isn't installed, and the ccweb proxy restricts git pushes to only the current working branch, preventing sessionlog from pushing to its `sessionlog/checkpoints/v1` shadow branch.
+
+**The solution:** `setup-ccweb` creates a `SessionStart` hook that automatically installs and configures sessionlog on every ccweb session.
+
+**CLI usage:**
+
+```bash
+# Run locally in your repository
+sessionlog setup-ccweb
+
+# Commit and push the generated .claude/ directory
+git add .claude/
+git commit -m "Add sessionlog ccweb integration"
+git push
+```
+
+This creates two files:
+
+- `.claude/settings.json` — registers a `SessionStart` hook that runs on every ccweb session
+- `.claude/scripts/setup-env.sh` — installs sessionlog, enables it, configures GitHub direct-push access, and installs a branch push filter
+
+**Options:**
+
+```bash
+# Force overwrite existing setup
+sessionlog setup-ccweb --force
+
+# Customize allowed push branch prefixes
+sessionlog setup-ccweb --push-prefixes "sessionlog/ my-prefix/"
+```
+
+**Programmatic usage:**
+
+```typescript
+import { setupCcweb } from 'sessionlog';
+
+const result = await setupCcweb({
+  cwd: '/path/to/repo',
+  force: true,
+  pushPrefixes: 'sessionlog/ claude/',
+});
+// result: { success, settingsCreated, scriptCreated, errors }
+```
+
+**Requirements:**
+
+- Set `GITHUB_TOKEN` as an environment variable in your ccweb settings (needed for pushing session data to GitHub)
+- Enable **Trusted** network access level in ccweb (needed to download the sessionlog npm package)
+
+**What the SessionStart hook does on each ccweb session:**
+
+1. Installs sessionlog via `npm install -g sessionlog`
+2. Runs `sessionlog enable --agent claude-code --local`
+3. Configures git to push directly to GitHub using `GITHUB_TOKEN` (bypassing the ccweb proxy)
+4. Installs a `pre-push` filter that only allows pushes to `sessionlog/` and `claude/` prefixed branches (safety guardrail)
+
+**Customizing push prefixes:**
+
+The setup script restricts direct pushes to branches matching allowed prefixes. To modify which prefixes are allowed, either pass `--push-prefixes` during setup or edit `ALLOWED_PUSH_PREFIXES` in `.claude/scripts/setup-env.sh` directly.
 
 ## Agent System
 
