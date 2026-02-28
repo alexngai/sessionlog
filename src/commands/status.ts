@@ -11,9 +11,12 @@ import {
   getWorktreeRoot,
   getCurrentBranch,
   refExists,
+  initSessionRepo,
+  resolveSessionRepoPath,
 } from '../git-operations.js';
 import { loadSettings } from '../config.js';
 import { createSessionStore } from '../store/session-store.js';
+import { SESSION_DIR_NAME } from '../types.js';
 import { areGitHooksInstalled } from '../hooks/git-hooks.js';
 import { detectAgents } from '../agent/registry.js';
 import { hasHookSupport } from '../agent/types.js';
@@ -88,8 +91,23 @@ export async function status(cwd?: string): Promise<StatusResult> {
   const root = await getWorktreeRoot(cwd);
   const settings = await loadSettings(cwd);
   const branch = await getCurrentBranch(cwd);
-  const hasCheckpoints = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, cwd);
   const gitHooks = await areGitHooksInstalled(root);
+
+  // Resolve session repo if configured
+  let sessionRepoCwd: string | undefined;
+  let sessionsDir: string | undefined;
+  if (settings.sessionRepoPath) {
+    try {
+      const resolved = resolveSessionRepoPath(settings.sessionRepoPath, root);
+      sessionRepoCwd = await initSessionRepo(resolved);
+      sessionsDir = `${sessionRepoCwd}/${SESSION_DIR_NAME}`;
+    } catch {
+      // Fall back to project repo if session repo can't be initialized
+    }
+  }
+
+  const checkpointsCwd = sessionRepoCwd ?? cwd;
+  const hasCheckpoints = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, checkpointsCwd);
 
   // Detect agents with hooks
   const agents = await detectAgents(cwd);
@@ -102,7 +120,7 @@ export async function status(cwd?: string): Promise<StatusResult> {
   }
 
   // Load sessions
-  const sessionStore = createSessionStore(cwd);
+  const sessionStore = createSessionStore(cwd, sessionsDir);
   const allSessions = await sessionStore.list();
 
   const sessions: SessionStatus[] = allSessions.map((s) => ({

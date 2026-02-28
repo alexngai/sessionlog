@@ -23,11 +23,13 @@ import { clean } from './commands/clean.js';
 import { reset } from './commands/reset.js';
 import { explainCommit, getCheckpointDetail } from './commands/explain.js';
 import { discoverResumeInfo, listResumableBranches } from './commands/resume.js';
-import { isEnabled } from './config.js';
+import { isEnabled, loadSettings } from './config.js';
 import { createSessionStore } from './store/session-store.js';
 import { createCheckpointStore } from './store/checkpoint-store.js';
 import { createManualCommitStrategy } from './strategy/manual-commit.js';
 import { getVersion } from './index.js';
+import { getWorktreeRoot, initSessionRepo, resolveSessionRepoPath } from './git-operations.js';
+import { SESSION_DIR_NAME } from './types.js';
 
 // ============================================================================
 // Argument Parsing Helpers
@@ -72,6 +74,7 @@ async function cmdEnable(args: string[]): Promise<void> {
     project: hasFlag(args, '--project'),
     skipPushSessions: hasFlag(args, '--skip-push-sessions') ? true : undefined,
     telemetry: getFlagValue(args, '--telemetry') === 'false' ? false : undefined,
+    sessionRepoPath: getFlagValue(args, '--session-repo'),
   });
 
   if (!result.enabled) {
@@ -120,6 +123,9 @@ async function cmdStatus(args: string[]): Promise<void> {
   console.log(`Checkpoints branch: ${result.hasCheckpointsBranch ? 'exists' : 'not created'}`);
   console.log(`Git hooks: ${result.gitHooksInstalled ? 'installed' : 'not installed'}`);
   console.log(`Agents: ${result.agents.length > 0 ? result.agents.join(', ') : 'none'}`);
+  if (result.settings.sessionRepoPath) {
+    console.log(`Session repo: ${result.settings.sessionRepoPath}`);
+  }
 
   if (result.sessions.length > 0) {
     console.log(`\nActive sessions (${result.sessions.length}):`);
@@ -319,9 +325,22 @@ async function cmdHooksGit(args: string[]): Promise<void> {
   // Bail silently if Entire is not enabled
   if (!(await isEnabled())) return;
 
+  // Resolve session repo if configured
+  const settings = await loadSettings();
+  let sessionRepoCwd: string | undefined;
+  let sessionsDir: string | undefined;
+
+  if (settings.sessionRepoPath) {
+    const root = await getWorktreeRoot();
+    const resolved = resolveSessionRepoPath(settings.sessionRepoPath, root);
+    sessionRepoCwd = await initSessionRepo(resolved);
+    sessionsDir = `${sessionRepoCwd}/${SESSION_DIR_NAME}`;
+  }
+
   const strategy = createManualCommitStrategy({
-    sessionStore: createSessionStore(),
-    checkpointStore: createCheckpointStore(),
+    sessionStore: createSessionStore(undefined, sessionsDir),
+    checkpointStore: createCheckpointStore(undefined, sessionRepoCwd),
+    sessionRepoCwd,
   });
 
   switch (hookName) {
@@ -377,6 +396,9 @@ Commands:
   explain     Show session or commit details
   resume      Switch branches and restore sessions
   version     Show version
+
+Options:
+  enable --session-repo <path>   Store sessions in a separate repository
 
 Run 'entire <command> --help' for more information on a command.`);
 }

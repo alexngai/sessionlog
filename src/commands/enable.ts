@@ -15,7 +15,14 @@ import {
   ENTIRE_TMP_DIR,
   SESSION_DIR_NAME,
 } from '../types.js';
-import { isGitRepository, getWorktreeRoot, getGitDir, getHead } from '../git-operations.js';
+import {
+  isGitRepository,
+  getWorktreeRoot,
+  getGitDir,
+  getHead,
+  initSessionRepo,
+  resolveSessionRepoPath,
+} from '../git-operations.js';
 import { saveProjectSettings, saveLocalSettings, ensureGitignore } from '../config.js';
 import { installGitHooks } from '../hooks/git-hooks.js';
 import { detectAgent, getAgent, listAgentNames } from '../agent/registry.js';
@@ -46,6 +53,9 @@ export interface EnableOptions {
 
   /** Opt out of anonymous analytics */
   telemetry?: boolean;
+
+  /** Path to a separate repository for session/checkpoint storage */
+  sessionRepoPath?: string;
 }
 
 export interface EnableResult {
@@ -120,10 +130,26 @@ export async function enable(options: EnableOptions = {}): Promise<EnableResult>
     settings.telemetryEnabled = options.telemetry;
   }
 
+  if (options.sessionRepoPath) {
+    settings.sessionRepoPath = options.sessionRepoPath;
+  }
+
   if (options.local) {
     await saveLocalSettings(settings, cwd);
   } else {
     await saveProjectSettings(settings, cwd);
+  }
+
+  // Initialize separate session repo if configured
+  if (options.sessionRepoPath) {
+    try {
+      const resolved = resolveSessionRepoPath(options.sessionRepoPath, root);
+      await initSessionRepo(resolved);
+    } catch (e) {
+      errors.push(
+        `Failed to initialize session repo: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   // Set up .gitignore for local files

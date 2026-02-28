@@ -66,6 +66,7 @@ function mergeSettings(project: EntireSettings, local: EntireSettings): EntireSe
     skipPushSessions: local.skipPushSessions ?? project.skipPushSessions,
     telemetryEnabled: local.telemetryEnabled ?? project.telemetryEnabled,
     summarizationEnabled: local.summarizationEnabled ?? project.summarizationEnabled,
+    sessionRepoPath: local.sessionRepoPath ?? project.sessionRepoPath,
   };
 }
 

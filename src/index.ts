@@ -117,6 +117,8 @@ export {
   getGitAuthor,
   resolveGitDirSync,
   atomicWriteFile,
+  initSessionRepo,
+  resolveSessionRepoPath,
   GitError,
   type GitAuthor,
   type GitExecOptions,

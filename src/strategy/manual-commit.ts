@@ -65,10 +65,15 @@ export interface ManualCommitStrategyConfig {
   sessionStore: SessionStore;
   checkpointStore: CheckpointStore;
   cwd?: string;
+  /** When a separate session repo is configured, this is its working directory.
+   *  Used for pushing the checkpoints branch from the correct repo. */
+  sessionRepoCwd?: string;
 }
 
 export function createManualCommitStrategy(config: ManualCommitStrategyConfig): Strategy {
-  const { sessionStore, checkpointStore, cwd } = config;
+  const { sessionStore, checkpointStore, cwd, sessionRepoCwd } = config;
+  /** The cwd for operations on the committed checkpoints branch */
+  const committedCwd = sessionRepoCwd ?? cwd;
 
   // ========================================================================
   // Session State Helpers
@@ -312,11 +317,12 @@ export function createManualCommitStrategy(config: ManualCommitStrategyConfig): 
     // PrePush - Push metadata branch alongside user push
     // ======================================================================
     async prePush(remote: string): Promise<void> {
-      const branchExists = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, cwd);
+      const pushCwd = committedCwd;
+      const branchExists = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, pushCwd);
       if (!branchExists) return;
 
       try {
-        await pushBranch(remote, CHECKPOINTS_BRANCH, false, cwd);
+        await pushBranch(remote, CHECKPOINTS_BRANCH, false, pushCwd);
       } catch {
         // Non-fatal: metadata push failure shouldn't block user push
       }
@@ -697,8 +703,8 @@ export function createManualCommitStrategy(config: ManualCommitStrategyConfig): 
   async function getLogsOnlyRewindPoints(limit: number): Promise<RewindPoint[]> {
     const points: RewindPoint[] = [];
 
-    // Check if checkpoints branch exists
-    const branchExists = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, cwd);
+    // Check if checkpoints branch exists (in session repo if configured)
+    const branchExists = await refExists(`refs/heads/${CHECKPOINTS_BRANCH}`, committedCwd);
     if (!branchExists) return points;
 
     // Get committed checkpoints

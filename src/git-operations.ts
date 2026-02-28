@@ -145,6 +145,52 @@ export async function getSessionsDir(cwd?: string): Promise<string> {
 }
 
 // ============================================================================
+// Session Repository
+// ============================================================================
+
+/**
+ * Initialize a separate git repository for session/checkpoint storage.
+ * Creates the repo if it doesn't already exist.
+ * Returns the absolute path to the initialized repo.
+ */
+export async function initSessionRepo(repoPath: string): Promise<string> {
+  const absPath = path.resolve(repoPath);
+  try {
+    await fs.promises.access(path.join(absPath, '.git'));
+    // Already initialized
+  } catch {
+    await fs.promises.mkdir(absPath, { recursive: true });
+    await execFileAsync('git', ['init'], {
+      cwd: absPath,
+      timeout: 30000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+    // Create an initial empty commit so refs work properly
+    await execFileAsync('git', ['commit', '--allow-empty', '-m', 'Initialize session repository'], {
+      cwd: absPath,
+      timeout: 30000,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_AUTHOR_NAME: 'Entire',
+        GIT_AUTHOR_EMAIL: 'entire@localhost',
+        GIT_COMMITTER_NAME: 'Entire',
+        GIT_COMMITTER_EMAIL: 'entire@localhost',
+      },
+    });
+  }
+  return absPath;
+}
+
+/**
+ * Resolve the session repo path to an absolute path (if configured).
+ * If the path is relative, it's resolved relative to the project root.
+ */
+export function resolveSessionRepoPath(sessionRepoPath: string, projectRoot: string): string {
+  return path.resolve(projectRoot, sessionRepoPath);
+}
+
+// ============================================================================
 // Ref Operations
 // ============================================================================
 

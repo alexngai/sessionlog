@@ -384,6 +384,11 @@ export interface EntireSettings {
   skipPushSessions?: boolean;
   telemetryEnabled?: boolean;
   summarizationEnabled?: boolean;
+  /** Path to a separate git repository for storing session/checkpoint data.
+   *  When set, committed checkpoints and session state files are stored
+   *  in this repo instead of the project repo. Shadow branches (temporary
+   *  checkpoints) remain in the project repo. */
+  sessionRepoPath?: string;
 }
 
 export const DEFAULT_SETTINGS: EntireSettings = {

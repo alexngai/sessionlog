@@ -44,8 +44,16 @@ export interface SessionStore {
 // Filesystem Session Store
 // ============================================================================
 
-export function createSessionStore(cwd?: string): SessionStore {
-  let sessionsDirCache: string | null = null;
+/**
+ * Create a session store.
+ *
+ * @param cwd - The project working directory (used to locate .git/entire-sessions/)
+ * @param sessionsDir - Optional explicit directory for session state files.
+ *   When provided, session files are stored here instead of .git/entire-sessions/.
+ *   This is used when a separate session repo is configured.
+ */
+export function createSessionStore(cwd?: string, sessionsDir?: string): SessionStore {
+  let sessionsDirCache: string | null = sessionsDir ?? null;
 
   async function getDir(): Promise<string> {
     if (sessionsDirCache) return sessionsDirCache;
