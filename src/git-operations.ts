@@ -192,14 +192,26 @@ export function resolveSessionRepoPath(sessionRepoPath: string, projectRoot: str
 }
 
 /**
- * Derive a stable, short project identifier from the project's worktree root.
+ * Derive a stable, human-readable project identifier from the project's worktree root.
  * This is used to namespace data when multiple projects share a session repo.
  *
- * Uses the first 12 hex chars of a SHA-256 hash of the absolute worktree root path.
+ * Format: `<dir-name>-<short-hash>` (e.g. "my-project-a1b2c3d4").
+ * The directory name is sanitized to lowercase alphanumeric + hyphens,
+ * and a short hash suffix ensures uniqueness when two projects share
+ * the same directory name at different paths.
  */
 export function getProjectID(projectRoot: string): string {
   const absRoot = path.resolve(projectRoot);
-  return crypto.createHash('sha256').update(absRoot).digest('hex').slice(0, 12);
+  const dirName = path.basename(absRoot);
+  // Sanitize: lowercase, replace non-alphanumeric with hyphens, collapse/trim hyphens
+  const sanitized = dirName
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  const shortHash = crypto.createHash('sha256').update(absRoot).digest('hex').slice(0, 8);
+  const prefix = sanitized || 'project';
+  return `${prefix}-${shortHash}`;
 }
 
 // ============================================================================
