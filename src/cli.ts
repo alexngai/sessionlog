@@ -16,6 +16,7 @@ import './agent/agents/opencode.js';
 
 import { enable } from './commands/enable.js';
 import { disable } from './commands/disable.js';
+import { setupCcweb } from './commands/setup-ccweb.js';
 import { status, formatStatusJSON, formatTokens } from './commands/status.js';
 import { listRewindPoints, rewindTo, listRewindPointsJSON } from './commands/rewind.js';
 import { doctor, diagnose } from './commands/doctor.js';
@@ -311,6 +312,30 @@ async function cmdResume(args: string[]): Promise<void> {
   }
 }
 
+async function cmdSetupCcweb(args: string[]): Promise<void> {
+  const result = await setupCcweb({
+    force: hasFlag(args, '--force', '-f'),
+    pushPrefixes: getFlagValue(args, '--push-prefixes'),
+  });
+
+  if (!result.success) {
+    console.error('Failed to set up ccweb integration:');
+    for (const err of result.errors) console.error(`  ${err}`);
+    process.exit(1);
+  }
+
+  console.log('Claude Code Web integration configured.');
+  console.log(`  Settings: ${result.settingsCreated ? 'created' : 'already exists'}`);
+  console.log(`  Script: ${result.scriptCreated ? 'created' : 'already exists'}`);
+  console.log('\nNext steps:');
+  console.log('  1. Commit the .claude/ directory');
+  console.log('  2. Push to your repository');
+  console.log('  3. Open the repo in Claude Code Web');
+  console.log('\nRequirements:');
+  console.log('  - Set GITHUB_TOKEN in your ccweb environment variables');
+  console.log('  - Enable "Trusted" network access level in ccweb settings');
+}
+
 // ============================================================================
 // Git Hook Dispatch
 // ============================================================================
@@ -396,16 +421,17 @@ function printHelp(): void {
 Usage: sessionlog <command> [options]
 
 Commands:
-  enable      Activate Sessionlog in a repository
-  disable     Deactivate Sessionlog hooks
-  status      Show current session information
-  rewind      Browse and restore checkpoints
-  doctor      Diagnose and fix stuck sessions
-  clean       Remove orphaned data artifacts
-  reset       Clear shadow branch and session state
-  explain     Show session or commit details
-  resume      Switch branches and restore sessions
-  version     Show version
+  enable        Activate Sessionlog in a repository
+  disable       Deactivate Sessionlog hooks
+  status        Show current session information
+  rewind        Browse and restore checkpoints
+  doctor        Diagnose and fix stuck sessions
+  clean         Remove orphaned data artifacts
+  reset         Clear shadow branch and session state
+  explain       Show session or commit details
+  resume        Switch branches and restore sessions
+  setup-ccweb   Configure for Claude Code Web sessions
+  version       Show version
 
 Options:
   enable --session-repo <path>   Store sessions in a separate repository
@@ -446,6 +472,8 @@ async function main(): Promise<void> {
       return cmdExplain(commandArgs);
     case 'resume':
       return cmdResume(commandArgs);
+    case 'setup-ccweb':
+      return cmdSetupCcweb(commandArgs);
     case 'hooks': {
       // `sessionlog hooks git <hook-name> [args...]`
       const subcommand = commandArgs[0];

@@ -316,6 +316,12 @@ export {
 export { reset, type ResetOptions, type ResetResult } from './commands/reset.js';
 
 export {
+  setupCcweb,
+  type SetupCcwebOptions,
+  type SetupCcwebResult,
+} from './commands/setup-ccweb.js';
+
+export {
   listCheckpoints,
   getCheckpointDetail,
   getCheckpointTranscript,
