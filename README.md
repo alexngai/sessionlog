@@ -1,6 +1,6 @@
 # sessionlog
 
-TypeScript implementation of the [Sessionlog CLI](https://github.com/entireio/cli) — a Git-integrated tool that captures AI agent sessions as searchable records within your repository.
+Unofficial TypeScript reimplementation of the [Entire CLI](https://github.com/entireio/cli) — a Git-integrated tool that captures AI agent sessions as searchable records within your repository.
 
 This package provides the core library used to build session tracking, checkpoint management, and agent integrations for AI coding tools.
 
