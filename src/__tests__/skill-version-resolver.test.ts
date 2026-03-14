@@ -275,6 +275,93 @@ metadata:
     const result = await resolver.resolve({ skillName: 'nonexistent', cwd: tmpDir });
     expect(result).toBeNull();
   });
+
+  it('should skip skill materialized via symlink from .skilltree', async () => {
+    // Create source in .skilltree/skills/
+    writeFile(
+      tmpDir,
+      '.skilltree/skills/linked-skill/SKILL.md',
+      `---
+name: Linked
+version: 1.0.0
+---
+`,
+    );
+    writeFile(
+      tmpDir,
+      '.skilltree/skills/linked-skill/.skilltree.json',
+      JSON.stringify({
+        upstream: { remote: 'r', skillId: 'x', version: '1.0.0', syncedAt: '2025-01-01T00:00:00Z' },
+      }),
+    );
+
+    // Symlink into .claude/skills/
+    const target = path.join(tmpDir, '.claude', 'skills', 'linked-skill');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.symlinkSync(path.join(tmpDir, '.skilltree', 'skills', 'linked-skill'), target, 'dir');
+
+    const result = await resolver.resolve({ skillName: 'linked-skill', cwd: tmpDir });
+    // Should return null so SkillTreeResolver can handle it
+    expect(result).toBeNull();
+  });
+
+  it('should skip skill with .skilltree-managed marker (copy mode)', async () => {
+    const skillDir = path.join(tmpDir, '.claude', 'skills', 'copied-skill');
+    fs.mkdirSync(skillDir, { recursive: true });
+    writeFile(
+      tmpDir,
+      '.claude/skills/copied-skill/SKILL.md',
+      `---
+name: Copied
+version: 2.0.0
+---
+`,
+    );
+    fs.writeFileSync(path.join(skillDir, '.skilltree-managed'), '{}');
+
+    commitFile(
+      tmpDir,
+      '.claude/skills/copied-skill/SKILL.md',
+      `---
+name: Copied
+version: 2.0.0
+---
+`,
+    );
+
+    const result = await resolver.resolve({ skillName: 'copied-skill', cwd: tmpDir });
+    expect(result).toBeNull();
+  });
+
+  it('should skip skill with .skilltree.json sidecar in .claude/skills/', async () => {
+    writeFile(
+      tmpDir,
+      '.claude/skills/sidecar-skill/SKILL.md',
+      `---
+name: Sidecar
+version: 3.0.0
+---
+`,
+    );
+    writeFile(
+      tmpDir,
+      '.claude/skills/sidecar-skill/.skilltree.json',
+      JSON.stringify({ source: { type: 'imported' } }),
+    );
+
+    commitFile(
+      tmpDir,
+      '.claude/skills/sidecar-skill/SKILL.md',
+      `---
+name: Sidecar
+version: 3.0.0
+---
+`,
+    );
+
+    const result = await resolver.resolve({ skillName: 'sidecar-skill', cwd: tmpDir });
+    expect(result).toBeNull();
+  });
 });
 
 // ============================================================================
@@ -374,6 +461,41 @@ version: 1.0.0
     expect(result!.version).toBe('1.0.0');
     expect(result!.upstream).toBeUndefined();
     expect(result!.source).toBeUndefined();
+  });
+
+  it('should extract namespace field from .skilltree.json sidecar (v0.1.5+)', async () => {
+    writeFile(
+      tmpDir,
+      '.skilltree/skills/scoped-skill/SKILL.md',
+      `---
+name: Scoped Skill
+version: 1.0.0
+author: team
+status: active
+---
+
+Content
+`,
+    );
+    writeFile(
+      tmpDir,
+      '.skilltree/skills/scoped-skill/.skilltree.json',
+      JSON.stringify({
+        source: { type: 'imported' },
+        namespace: { scope: 'team', owner: 'platform-eng' },
+        upstream: {
+          remote: 'company',
+          skillId: 'scoped-skill',
+          version: '1.0.0',
+          syncedAt: '2025-09-01T00:00:00Z',
+        },
+      }),
+    );
+
+    const result = await resolver.resolve({ skillName: 'scoped-skill', cwd: tmpDir });
+    expect(result).not.toBeNull();
+    expect(result!.namespace).toEqual({ scope: 'team', owner: 'platform-eng' });
+    expect(result!.upstream).toBeDefined();
   });
 
   it('should return null when skill not found in .skilltree', async () => {

@@ -50,6 +50,11 @@ export interface ResolvedSkillVersion {
     type: string;
     location?: string;
   };
+  /** For skill-tree skills: namespace/scope info (v0.1.5+) */
+  namespace?: {
+    scope: string;
+    owner?: string;
+  };
   /** For plugin skills: package name and version */
   plugin?: {
     packageName: string;
@@ -184,6 +189,15 @@ export class RepoSkillResolver implements SkillVersionResolver {
     const filePath = findSkillFile(skillsDir, ctx.skillName);
     if (!filePath) return null;
 
+    // Check if this is a materialized skill-tree skill (symlink or copy).
+    // skill-tree's Materializer creates symlinks from .claude/skills/<id> → .skilltree/skills/<id>,
+    // or copies the directory and adds a .skilltree-managed marker file.
+    // In either case, we should skip and let the SkillTreeResolver handle it
+    // so that upstream/source metadata from .skilltree.json is preserved.
+    if (isMaterializedSkillTree(filePath, ctx.cwd)) {
+      return null;
+    }
+
     const content = fs.readFileSync(filePath, 'utf-8');
     const { top, metadata } = parseFrontmatterWithMetadata(content);
 
@@ -206,6 +220,45 @@ export class RepoSkillResolver implements SkillVersionResolver {
       status: top.status ?? metadata.status,
     };
   }
+}
+
+/**
+ * Detect whether a skill file in .claude/skills/ was materialized by skill-tree.
+ *
+ * Returns true if:
+ * 1. The file (or its parent directory) is a symlink pointing into .skilltree/skills/, OR
+ * 2. The skill directory contains a .skilltree-managed marker file (copy mode), OR
+ * 3. The skill directory contains a .skilltree.json sidecar (copied from .skilltree/skills/)
+ */
+function isMaterializedSkillTree(filePath: string, cwd: string): boolean {
+  const skilltreeSkillsDir = path.join(cwd, '.skilltree', 'skills');
+
+  // Check if the file or its parent directory is a symlink pointing to .skilltree/
+  const skillDir = path.dirname(filePath);
+  try {
+    const stat = fs.lstatSync(skillDir);
+    if (stat.isSymbolicLink()) {
+      const target = fs.realpathSync(skillDir);
+      if (target.startsWith(skilltreeSkillsDir)) {
+        return true;
+      }
+    }
+  } catch {
+    // Ignore stat errors
+  }
+
+  // Check for .skilltree-managed marker (copy mode)
+  if (fs.existsSync(path.join(skillDir, '.skilltree-managed'))) {
+    return true;
+  }
+
+  // Check for .skilltree.json sidecar in the skill directory
+  // (present when skill-tree copies a skill dir including its metadata)
+  if (fs.existsSync(path.join(skillDir, '.skilltree.json'))) {
+    return true;
+  }
+
+  return false;
 }
 
 // ============================================================================
@@ -245,6 +298,7 @@ export class SkillTreeResolver implements SkillVersionResolver {
         | { remote: string; skillId: string; version: string; syncedAt: string }
         | undefined;
       const source = sidecar.source as { type: string; location?: string } | undefined;
+      const namespace = sidecar.namespace as { scope: string; owner?: string } | undefined;
 
       return {
         sourceType: 'skill-tree',
@@ -254,6 +308,7 @@ export class SkillTreeResolver implements SkillVersionResolver {
         status: frontmatter.status,
         upstream: upstream ?? undefined,
         source: source ?? undefined,
+        namespace: namespace ?? undefined,
       };
     }
 
