@@ -759,6 +759,139 @@ function process(data: UserInput): ProcessedResult { ... }
       expect(skill.upstreamVersion).toBe('1.3.0');
     });
 
+    it('should correctly resolve materialized skill (symlink from .skilltree to .claude/skills)', async () => {
+      // skill-tree v0.1.5 materializer can symlink/copy skills to .claude/skills/
+      // When this happens, RepoSkillResolver finds the skill first and misclassifies
+      // it as 'repo-skill', losing upstream/source metadata from .skilltree.json
+
+      // Source skill in .skilltree/skills/ with sidecar metadata
+      writeFile(
+        tmpDir,
+        '.skilltree/skills/materialized-skill/SKILL.md',
+        `---
+name: Materialized Skill
+version: 3.0.0
+author: upstream-team
+status: active
+---
+
+# Materialized via skill-tree
+
+This skill was imported and materialized.
+`,
+      );
+      writeFile(
+        tmpDir,
+        '.skilltree/skills/materialized-skill/.skilltree.json',
+        JSON.stringify({
+          source: { type: 'imported', location: 'https://github.com/team/skills' },
+          upstream: {
+            remote: 'team',
+            skillId: 'materialized-skill',
+            version: '3.0.0',
+            syncedAt: '2025-09-01T00:00:00Z',
+          },
+          namespace: { scope: 'team', owner: 'platform' },
+        }),
+      );
+
+      // Simulate materialization: create a symlink in .claude/skills/ pointing to .skilltree/skills/
+      const symlinkTarget = path.join(tmpDir, '.claude', 'skills', 'materialized-skill');
+      fs.mkdirSync(path.dirname(symlinkTarget), { recursive: true });
+      fs.symlinkSync(
+        path.join(tmpDir, '.skilltree', 'skills', 'materialized-skill'),
+        symlinkTarget,
+        'dir',
+      );
+      // Commit the symlink so git log works
+      execFileSync('git', ['add', '.claude/skills/materialized-skill'], {
+        cwd: tmpDir,
+        stdio: 'pipe',
+      });
+      execFileSync('git', ['commit', '-m', 'Add materialized skill'], {
+        cwd: tmpDir,
+        stdio: 'pipe',
+      });
+
+      const { sessionStore, lifecycle } = setupLifecycle(tmpDir);
+      await startSession(lifecycle, agent);
+      await dispatchSkillUse(lifecycle, agent, 'materialized-skill');
+
+      const state = await sessionStore.load('e2e-version-session');
+      const skill = state!.skillsUsed![0];
+      // RepoSkillResolver detects the symlink/sidecar and skips it,
+      // allowing SkillTreeResolver to handle it with full upstream metadata.
+      expect(skill.sourceType).toBe('skill-tree');
+      expect(skill.version).toBe('3.0.0');
+      expect(skill.upstreamVersion).toBe('3.0.0');
+    });
+
+    it('should correctly resolve materialized skill (copy mode with .skilltree-managed marker)', async () => {
+      // In copy mode, skill-tree v0.1.5 copies the skill dir and adds a .skilltree-managed marker
+      writeFile(
+        tmpDir,
+        '.skilltree/skills/copied-skill/SKILL.md',
+        `---
+name: Copied Skill
+version: 2.0.0
+author: team
+status: active
+---
+
+# Copied skill
+`,
+      );
+      writeFile(
+        tmpDir,
+        '.skilltree/skills/copied-skill/.skilltree.json',
+        JSON.stringify({
+          source: { type: 'imported', location: 'https://github.com/org/skills' },
+          upstream: {
+            remote: 'org',
+            skillId: 'copied-skill',
+            version: '2.0.0',
+            syncedAt: '2025-09-15T00:00:00Z',
+          },
+        }),
+      );
+
+      // Simulate copy-mode materialization to .claude/skills/
+      const copyTarget = path.join(tmpDir, '.claude', 'skills', 'copied-skill');
+      fs.mkdirSync(copyTarget, { recursive: true });
+      fs.cpSync(path.join(tmpDir, '.skilltree', 'skills', 'copied-skill'), copyTarget, {
+        recursive: true,
+      });
+      // Add .skilltree-managed marker (as skill-tree v0.1.5 does in copy mode)
+      fs.writeFileSync(
+        path.join(copyTarget, '.skilltree-managed'),
+        JSON.stringify({
+          source: path.join(tmpDir, '.skilltree', 'skills', 'copied-skill'),
+          copiedAt: new Date().toISOString(),
+        }),
+      );
+      // Commit the copied skill
+      execFileSync('git', ['add', '.claude/skills/copied-skill'], {
+        cwd: tmpDir,
+        stdio: 'pipe',
+      });
+      execFileSync('git', ['commit', '-m', 'Add copied skill'], {
+        cwd: tmpDir,
+        stdio: 'pipe',
+      });
+
+      const { sessionStore, lifecycle } = setupLifecycle(tmpDir);
+      await startSession(lifecycle, agent);
+      await dispatchSkillUse(lifecycle, agent, 'copied-skill');
+
+      const state = await sessionStore.load('e2e-version-session');
+      const skill = state!.skillsUsed![0];
+      // RepoSkillResolver detects the .skilltree-managed marker and .skilltree.json
+      // sidecar, deferring to SkillTreeResolver which preserves upstream metadata.
+      expect(skill.sourceType).toBe('skill-tree');
+      expect(skill.version).toBe('2.0.0');
+      expect(skill.upstreamVersion).toBe('2.0.0');
+    });
+
     it('should detect version drift between local and upstream', async () => {
       // Local version modified after install (version drift)
       writeFile(
