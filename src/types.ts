@@ -107,6 +107,14 @@ export interface Event {
   skillName?: string;
   /** Skill arguments (from Skill tool_input) */
   skillArgs?: string;
+  /** Agent team name (from Agent tool_input.team_name) */
+  teamName?: string;
+  /** Addressable agent name (from Agent tool_input.name) */
+  agentName?: string;
+  /** Isolation mode: 'worktree' or undefined (from Agent tool_input.isolation) */
+  isolation?: string;
+  /** Whether the agent runs in background (from Agent tool_input.run_in_background) */
+  runInBackground?: boolean;
 }
 
 // ============================================================================
@@ -159,6 +167,30 @@ export interface PlanEntry {
   allowedPrompts?: Array<{ tool: string; prompt: string }>;
 }
 
+/** A reference to a spawned agent tracked by the parent session */
+export interface SpawnedAgentRef {
+  /** The tool_use_id from the Agent/Task tool call */
+  toolUseID: string;
+  /** The agentId returned in tool_response (populated on SubagentEnd) */
+  subagentID?: string;
+  /** Addressable name (from tool_input.name) */
+  agentName?: string;
+  /** Agent specialization (from tool_input.subagent_type) */
+  subagentType?: string;
+  /** Team name (from tool_input.team_name) */
+  teamName?: string;
+  /** Isolation mode: 'worktree' or undefined */
+  isolation?: string;
+  /** Whether the agent runs in background */
+  runInBackground?: boolean;
+  /** ISO timestamp when the agent was spawned */
+  spawnedAt: string;
+  /** ISO timestamp when the agent completed (populated on SubagentEnd) */
+  completedAt?: string;
+  /** Linked child session ID (populated via session correlation) */
+  childSessionID?: string;
+}
+
 export interface SessionState {
   sessionID: string;
   cliVersion?: string;
@@ -194,6 +226,12 @@ export interface SessionState {
   planEntries?: PlanEntry[];
   /** Skills used during the session */
   skillsUsed?: TrackedSkill[];
+  /** Agents spawned by this session (parent tracking) */
+  spawnedAgents?: SpawnedAgentRef[];
+  /** Session ID of the parent that spawned this session (child tracking) */
+  parentSessionID?: string;
+  /** Team name this session belongs to */
+  teamName?: string;
 }
 
 export interface PromptAttribution {

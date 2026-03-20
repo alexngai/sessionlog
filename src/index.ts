@@ -39,6 +39,7 @@ export type {
   Event,
   SessionPhase,
   SessionState,
+  SpawnedAgentRef,
   PromptAttribution,
   TokenUsage,
   TrackedTask,
@@ -138,6 +139,20 @@ export {
   normalizeSessionState,
   type SessionStore,
 } from './store/session-store.js';
+
+// =============================================================================
+// Team Queries
+// =============================================================================
+
+export {
+  getTeamSessions,
+  getChildSessions,
+  getParentSession,
+  aggregateTeamFiles,
+  aggregateTeamTokens,
+  collectSpawnedAgents,
+  listTeamNames,
+} from './store/team-queries.js';
 
 // =============================================================================
 // Checkpoint Store

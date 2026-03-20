@@ -44,6 +44,8 @@ const HOOK_NAMES = [
   'user-prompt-submit',
   'pre-task',
   'post-task',
+  'pre-agent',
+  'post-agent',
   'post-todo',
   'post-task-create',
   'post-task-update',
@@ -218,24 +220,47 @@ class ClaudeCodeAgent
           };
 
         case 'pre-task':
+        case 'pre-agent': {
+          const preAgentInput = (data.tool_input ?? data.toolInput) as
+            | Record<string, unknown>
+            | undefined;
           return {
             type: EventType.SubagentStart,
             sessionID: String(data.session_id ?? data.sessionID ?? ''),
             sessionRef: String(data.transcript_path ?? data.transcriptPath ?? ''),
             toolUseID: String(data.tool_use_id ?? data.toolUseID ?? ''),
-            toolInput: data.tool_input ?? data.toolInput,
+            toolInput: preAgentInput,
+            subagentType: preAgentInput?.subagent_type as string | undefined,
+            teamName: preAgentInput?.team_name as string | undefined,
+            agentName: preAgentInput?.name as string | undefined,
+            isolation: preAgentInput?.isolation as string | undefined,
+            runInBackground: preAgentInput?.run_in_background as boolean | undefined,
+            taskDescription: preAgentInput?.prompt as string | undefined,
             timestamp: new Date(),
           };
+        }
 
         case 'post-task':
+        case 'post-agent': {
+          const postAgentInput = (data.tool_input ?? data.toolInput) as
+            | Record<string, unknown>
+            | undefined;
+          const postAgentResponse = data.tool_response as Record<string, unknown> | undefined;
           return {
             type: EventType.SubagentEnd,
             sessionID: String(data.session_id ?? data.sessionID ?? ''),
             sessionRef: String(data.transcript_path ?? data.transcriptPath ?? ''),
             toolUseID: String(data.tool_use_id ?? data.toolUseID ?? ''),
-            subagentID: (data.tool_response as Record<string, unknown>)?.agentId as string,
+            subagentID: postAgentResponse?.agentId as string | undefined,
+            subagentType: postAgentInput?.subagent_type as string | undefined,
+            teamName: postAgentInput?.team_name as string | undefined,
+            agentName: postAgentInput?.name as string | undefined,
+            isolation: postAgentInput?.isolation as string | undefined,
+            runInBackground: postAgentInput?.run_in_background as boolean | undefined,
+            toolInput: postAgentInput,
             timestamp: new Date(),
           };
+        }
 
         case 'post-todo':
           return {
@@ -378,7 +403,7 @@ class ClaudeCodeAgent
       { settingsKey: 'Stop', hookName: 'stop' },
     ];
 
-    // Task hooks (pre/post tool use for Task tool)
+    // Task/Agent hooks (pre/post tool use for Task and Agent tools)
     const taskHookMappings: Array<{
       settingsKey: keyof NonNullable<ClaudeSettings['hooks']>;
       hookName: string;
@@ -386,6 +411,8 @@ class ClaudeCodeAgent
     }> = [
       { settingsKey: 'PreToolUse', hookName: 'pre-task', matcher: 'Task' },
       { settingsKey: 'PostToolUse', hookName: 'post-task', matcher: 'Task' },
+      { settingsKey: 'PreToolUse', hookName: 'pre-agent', matcher: 'Agent' },
+      { settingsKey: 'PostToolUse', hookName: 'post-agent', matcher: 'Agent' },
       { settingsKey: 'PostToolUse', hookName: 'post-todo', matcher: 'TodoWrite' },
       { settingsKey: 'PostToolUse', hookName: 'post-task-create', matcher: 'TaskCreate' },
       { settingsKey: 'PostToolUse', hookName: 'post-task-update', matcher: 'TaskUpdate' },

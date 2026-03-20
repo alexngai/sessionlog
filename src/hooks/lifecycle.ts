@@ -8,7 +8,7 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import { readFile } from 'node:fs/promises';
-import type { Event, SessionState, TrackedSkill } from '../types.js';
+import type { Event, SessionState, TrackedSkill, SpawnedAgentRef } from '../types.js';
 import { EventType, addTokenUsage } from '../types.js';
 import type { SessionStore } from '../store/session-store.js';
 import type { CheckpointStore } from '../store/checkpoint-store.js';
@@ -266,6 +266,21 @@ export function createLifecycleHandler(config: LifecycleConfig): LifecycleHandle
     const state = await sessionStore.load(event.sessionID);
     if (!state) return;
 
+    // Track the spawned agent reference
+    if (event.toolUseID) {
+      if (!state.spawnedAgents) state.spawnedAgents = [];
+      const ref: SpawnedAgentRef = {
+        toolUseID: event.toolUseID,
+        agentName: event.agentName,
+        subagentType: event.subagentType,
+        teamName: event.teamName,
+        isolation: event.isolation,
+        runInBackground: event.runInBackground,
+        spawnedAt: new Date().toISOString(),
+      };
+      state.spawnedAgents.push(ref);
+    }
+
     state.lastInteractionTime = new Date().toISOString();
     await sessionStore.save(state);
   }
@@ -273,6 +288,15 @@ export function createLifecycleHandler(config: LifecycleConfig): LifecycleHandle
   async function handleSubagentEnd(_agent: Agent, event: Event): Promise<void> {
     const state = await sessionStore.load(event.sessionID);
     if (!state) return;
+
+    // Finalize the matching spawned agent reference
+    if (event.toolUseID && state.spawnedAgents) {
+      const ref = state.spawnedAgents.find((r) => r.toolUseID === event.toolUseID);
+      if (ref) {
+        ref.completedAt = new Date().toISOString();
+        if (event.subagentID) ref.subagentID = event.subagentID;
+      }
+    }
 
     state.lastInteractionTime = new Date().toISOString();
     await sessionStore.save(state);
