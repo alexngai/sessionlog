@@ -39,6 +39,9 @@ export interface SessionStore {
 
   /** Check if a session exists */
   exists(sessionID: string): Promise<boolean>;
+
+  /** Merge annotations into a session's existing annotations (load-merge-save) */
+  annotate(sessionID: string, annotations: Record<string, unknown>): Promise<boolean>;
 }
 
 // ============================================================================
@@ -170,6 +173,17 @@ export function createSessionStore(cwd?: string, sessionsDir?: string): SessionS
         return false;
       }
     },
+
+    async annotate(sessionID: string, annotations: Record<string, unknown>): Promise<boolean> {
+      const dir = await getDir();
+      const filePath = sessionFilePath(dir, sessionID);
+      const state = parseSessionFile(filePath);
+      if (!state) return false;
+      state.annotations = { ...state.annotations, ...annotations };
+      const content = JSON.stringify(serializeSessionState(state), null, 2);
+      await atomicWriteFile(filePath, content);
+      return true;
+    },
   };
 }
 
@@ -220,6 +234,10 @@ export function normalizeSessionState(id: string, data: Record<string, unknown>)
     skillsUsed: Array.isArray(data.skillsUsed)
       ? (data.skillsUsed as SessionState['skillsUsed'])
       : undefined,
+    annotations:
+      data.annotations && typeof data.annotations === 'object' && !Array.isArray(data.annotations)
+        ? (data.annotations as Record<string, unknown>)
+        : undefined,
   };
 }
 

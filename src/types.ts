@@ -182,6 +182,8 @@ export interface SessionState {
   planEntries?: PlanEntry[];
   /** Skills used during the session */
   skillsUsed?: TrackedSkill[];
+  /** Extensible annotations from external systems (e.g., swarm metadata) */
+  annotations?: Record<string, unknown>;
 }
 
 export interface PromptAttribution {

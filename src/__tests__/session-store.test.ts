@@ -2,8 +2,11 @@
  * Tests for Session Store Normalization
  */
 
-import { describe, it, expect } from 'vitest';
-import { normalizeSessionState } from '../store/session-store.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { normalizeSessionState, createSessionStore } from '../store/session-store.js';
 
 describe('Session Store', () => {
   describe('normalizeSessionState', () => {
@@ -161,6 +164,104 @@ describe('Session Store', () => {
       };
       const state = normalizeSessionState('id', { tasks });
       expect(state.tasks!['1'].description).toBe('Detailed description of the bug');
+    });
+
+    it('should preserve annotations when present', () => {
+      const annotations = {
+        swarmId: 'gsd-1710936000000',
+        teamName: 'gsd',
+        role: 'executor',
+      };
+      const state = normalizeSessionState('id', { annotations });
+      expect(state.annotations).toEqual(annotations);
+    });
+
+    it('should drop annotations when not an object', () => {
+      expect(normalizeSessionState('id', { annotations: 'string' }).annotations).toBeUndefined();
+      expect(normalizeSessionState('id', { annotations: [1, 2] }).annotations).toBeUndefined();
+      expect(normalizeSessionState('id', { annotations: null }).annotations).toBeUndefined();
+    });
+
+    it('should leave annotations undefined when absent', () => {
+      const state = normalizeSessionState('id', {});
+      expect(state.annotations).toBeUndefined();
+    });
+  });
+
+  describe('annotate', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sessionlog-test-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function writeSession(id: string, data: Record<string, unknown>): void {
+      fs.writeFileSync(
+        path.join(tmpDir, `${id}.json`),
+        JSON.stringify({ sessionID: id, baseCommit: '', phase: 'active', ...data }, null, 2),
+      );
+    }
+
+    it('should merge annotations into a session without existing annotations', async () => {
+      writeSession('sess-1', { startedAt: '2026-01-01T00:00:00Z' });
+      const store = createSessionStore(undefined, tmpDir);
+
+      const result = await store.annotate('sess-1', { swarmId: 'gsd-123', role: 'executor' });
+
+      expect(result).toBe(true);
+      const state = await store.load('sess-1');
+      expect(state!.annotations).toEqual({ swarmId: 'gsd-123', role: 'executor' });
+    });
+
+    it('should merge with existing annotations without overwriting', async () => {
+      writeSession('sess-2', {
+        startedAt: '2026-01-01T00:00:00Z',
+        annotations: { swarmId: 'gsd-123', teamName: 'gsd' },
+      });
+      const store = createSessionStore(undefined, tmpDir);
+
+      await store.annotate('sess-2', { role: 'verifier' });
+
+      const state = await store.load('sess-2');
+      expect(state!.annotations).toEqual({ swarmId: 'gsd-123', teamName: 'gsd', role: 'verifier' });
+    });
+
+    it('should overwrite individual keys when they conflict', async () => {
+      writeSession('sess-3', {
+        startedAt: '2026-01-01T00:00:00Z',
+        annotations: { role: 'executor' },
+      });
+      const store = createSessionStore(undefined, tmpDir);
+
+      await store.annotate('sess-3', { role: 'verifier' });
+
+      const state = await store.load('sess-3');
+      expect(state!.annotations!.role).toBe('verifier');
+    });
+
+    it('should return false for non-existent session', async () => {
+      const store = createSessionStore(undefined, tmpDir);
+      const result = await store.annotate('does-not-exist', { swarmId: 'x' });
+      expect(result).toBe(false);
+    });
+
+    it('should not modify other session fields', async () => {
+      writeSession('sess-4', {
+        startedAt: '2026-01-01T00:00:00Z',
+        stepCount: 5,
+        filesTouched: ['a.ts'],
+      });
+      const store = createSessionStore(undefined, tmpDir);
+
+      await store.annotate('sess-4', { swarmId: 'gsd-123' });
+
+      const state = await store.load('sess-4');
+      expect(state!.stepCount).toBe(5);
+      expect(state!.filesTouched).toEqual(['a.ts']);
     });
   });
 });
