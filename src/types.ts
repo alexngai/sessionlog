@@ -131,6 +131,18 @@ export interface TrackedSkill {
   name: string;
   args?: string;
   usedAt: string;
+  /** How the skill was resolved (repo-skill, user-skill, skill-tree, plugin, unknown) */
+  sourceType?: string;
+  /** Resolved file path (relative to project root for repo skills) */
+  filePath?: string;
+  /** Semantic version from frontmatter or package.json */
+  version?: string;
+  /** Git commit SHA of the skill file (for repo/user-level skills) */
+  commitSha?: string;
+  /** For plugin skills: package name */
+  pluginPackage?: string;
+  /** For skill-tree skills: upstream version info */
+  upstreamVersion?: string;
 }
 
 /** A single plan mode enter/exit cycle */

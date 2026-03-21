@@ -8,7 +8,7 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import { readFile } from 'node:fs/promises';
-import type { Event, SessionState } from '../types.js';
+import type { Event, SessionState, TrackedSkill } from '../types.js';
 import { EventType, addTokenUsage } from '../types.js';
 import type { SessionStore } from '../store/session-store.js';
 import type { CheckpointStore } from '../store/checkpoint-store.js';
@@ -16,6 +16,11 @@ import type { Agent } from '../agent/types.js';
 import { hasTranscriptAnalyzer, hasTokenCalculator } from '../agent/types.js';
 import { getHead, getCurrentBranch, getUntrackedFiles, getGitAuthor } from '../git-operations.js';
 import { normalizeStoredPath } from '../utils/paths.js';
+import {
+  createSkillVersionResolverChain,
+  type SkillVersionResolverChain,
+  type SkillVersionResolverChainOptions,
+} from './skill-version-resolver.js';
 
 // ============================================================================
 // Types
@@ -25,6 +30,8 @@ export interface LifecycleConfig {
   sessionStore: SessionStore;
   checkpointStore: CheckpointStore;
   cwd?: string;
+  /** Options for the skill version resolver chain */
+  skillResolverOptions?: SkillVersionResolverChainOptions;
 }
 
 export interface LifecycleHandler {
@@ -38,6 +45,9 @@ export interface LifecycleHandler {
 
 export function createLifecycleHandler(config: LifecycleConfig): LifecycleHandler {
   const { sessionStore, cwd } = config;
+  const skillResolverChain: SkillVersionResolverChain = createSkillVersionResolverChain(
+    config.skillResolverOptions,
+  );
 
   return {
     async dispatch(agent: Agent, event: Event): Promise<void> {
@@ -378,11 +388,37 @@ export function createLifecycleHandler(config: LifecycleConfig): LifecycleHandle
     if (!state.skillsUsed) state.skillsUsed = [];
 
     if (event.skillName) {
-      state.skillsUsed.push({
+      const tracked: TrackedSkill = {
         name: event.skillName,
         args: event.skillArgs,
         usedAt: new Date().toISOString(),
-      });
+      };
+
+      // Attempt to resolve version/provenance info
+      if (cwd) {
+        try {
+          const resolved = await skillResolverChain.resolve({
+            skillName: event.skillName,
+            cwd,
+          });
+          if (resolved) {
+            tracked.sourceType = resolved.sourceType;
+            tracked.filePath = resolved.filePath;
+            tracked.version = resolved.version;
+            tracked.commitSha = resolved.commitSha;
+            if (resolved.plugin) {
+              tracked.pluginPackage = resolved.plugin.packageName;
+            }
+            if (resolved.upstream) {
+              tracked.upstreamVersion = resolved.upstream.version;
+            }
+          }
+        } catch {
+          // Version resolution is best-effort — don't block skill tracking
+        }
+      }
+
+      state.skillsUsed.push(tracked);
     }
 
     state.lastInteractionTime = new Date().toISOString();
