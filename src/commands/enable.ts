@@ -7,11 +7,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  type SessionlogSettings,
-  type AgentName,
-  SESSION_DIR_NAME,
-} from '../types.js';
+import { type SessionlogSettings, type AgentName, SESSION_DIR_NAME } from '../types.js';
 import {
   isGitRepository,
   getWorktreeRoot,
@@ -20,7 +16,12 @@ import {
   initSessionRepo,
   resolveSessionRepoPath,
 } from '../git-operations.js';
-import { resolveSessionlogDir, saveProjectSettings, saveLocalSettings, ensureGitignore } from '../config.js';
+import {
+  resolveSessionlogDir,
+  saveProjectSettings,
+  saveLocalSettings,
+  ensureGitignore,
+} from '../config.js';
 import { installGitHooks } from '../hooks/git-hooks.js';
 import { detectAgent, getAgent, listAgentNames } from '../agent/registry.js';
 import { hasHookSupport } from '../agent/types.js';
@@ -38,6 +39,9 @@ export interface EnableOptions {
 
   /** Force reinstall hooks even if already present */
   force?: boolean;
+
+  /** Skip installing agent hooks */
+  skipAgentHooks?: boolean;
 
   /** Save to local settings instead of project settings */
   local?: boolean;
@@ -160,9 +164,9 @@ export async function enable(options: EnableOptions = {}): Promise<EnableResult>
     errors.push(`Failed to install git hooks: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Install agent hooks
+  // Install agent hooks (skip when managed externally, e.g. by cc-swarm plugin hooks)
   let agentHooksInstalled = 0;
-  if (agent && hasHookSupport(agent)) {
+  if (!options.skipAgentHooks && agent && hasHookSupport(agent)) {
     try {
       agentHooksInstalled = await agent.installHooks(root, options.force);
     } catch (e) {

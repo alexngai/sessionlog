@@ -82,6 +82,7 @@ async function cmdEnable(args: string[]): Promise<void> {
     local: hasFlag(args, '--local'),
     project: hasFlag(args, '--project'),
     skipPushSessions: hasFlag(args, '--skip-push-sessions') ? true : undefined,
+    skipAgentHooks: hasFlag(args, '--skip-agent-hooks') ? true : undefined,
     telemetry: getFlagValue(args, '--telemetry') === 'false' ? false : undefined,
     sessionRepoPath: getFlagValue(args, '--session-repo'),
   });
