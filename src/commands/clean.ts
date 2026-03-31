@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { SESSIONLOG_TMP_DIR, SHADOW_BRANCH_PREFIX, CHECKPOINTS_BRANCH } from '../types.js';
 import { getWorktreeRoot, listBranches, deleteBranch } from '../git-operations.js';
 import { createSessionStore } from '../store/session-store.js';
+import { resolveSessionRepoConfig } from '../utils/session-repo.js';
 
 // ============================================================================
 // Types
@@ -42,14 +43,16 @@ export interface CleanOptions {
  */
 export async function findOrphaned(cwd?: string): Promise<CleanupItem[]> {
   const items: CleanupItem[] = [];
-  const sessionStore = createSessionStore(cwd);
+  const { sessionsDir, checkpointsBranch } = await resolveSessionRepoConfig(cwd);
+  const sessionStore = createSessionStore(cwd, sessionsDir);
   const sessions = await sessionStore.list();
   const activeBaseCommits = new Set(sessions.map((s) => s.baseCommit).filter(Boolean));
+  const cpBranch = checkpointsBranch ?? CHECKPOINTS_BRANCH;
 
   // 1. Orphaned shadow branches
   const branches = await listBranches(`${SHADOW_BRANCH_PREFIX}*`, cwd);
   for (const branch of branches) {
-    if (branch === CHECKPOINTS_BRANCH) continue;
+    if (branch === cpBranch || branch === CHECKPOINTS_BRANCH) continue;
 
     // Extract base commit from branch name
     const hashPart = branch.slice(SHADOW_BRANCH_PREFIX.length);

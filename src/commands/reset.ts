@@ -9,6 +9,7 @@ import type { SessionState } from '../types.js';
 import { getHead } from '../git-operations.js';
 import { createSessionStore } from '../store/session-store.js';
 import { createCheckpointStore } from '../store/checkpoint-store.js';
+import { resolveSessionRepoConfig } from '../utils/session-repo.js';
 
 // ============================================================================
 // Types
@@ -37,8 +38,9 @@ export interface ResetResult {
  */
 export async function reset(options: ResetOptions = {}): Promise<ResetResult> {
   const cwd = options.cwd;
-  const sessionStore = createSessionStore(cwd);
-  const checkpointStore = createCheckpointStore(cwd);
+  const { sessionRepoCwd, sessionsDir, checkpointsBranch } = await resolveSessionRepoConfig(cwd);
+  const sessionStore = createSessionStore(cwd, sessionsDir);
+  const checkpointStore = createCheckpointStore(cwd, sessionRepoCwd, checkpointsBranch);
   const head = await getHead(cwd);
 
   const errors: string[] = [];

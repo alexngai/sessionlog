@@ -8,6 +8,7 @@
 import type { RewindPoint } from '../types.js';
 import { git, hasUncommittedChanges } from '../git-operations.js';
 import { createCheckpointStore } from '../store/checkpoint-store.js';
+import { resolveSessionRepoConfig } from '../utils/session-repo.js';
 
 // ============================================================================
 // Types
@@ -37,7 +38,8 @@ export async function listRewindPoints(options: RewindOptions = {}): Promise<Rew
   const limit = options.limit ?? 20;
   const points: RewindPoint[] = [];
 
-  const checkpointStore = createCheckpointStore(cwd);
+  const { sessionRepoCwd, checkpointsBranch } = await resolveSessionRepoConfig(cwd);
+  const checkpointStore = createCheckpointStore(cwd, sessionRepoCwd, checkpointsBranch);
 
   // 1. Shadow branch checkpoints (temporary, most recent)
   const temporaryBranches = await checkpointStore.listTemporary();

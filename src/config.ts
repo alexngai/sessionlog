@@ -68,6 +68,32 @@ function loadSettingsFile(filePath: string): SessionlogSettings {
 }
 
 function mergeSettings(project: SessionlogSettings, local: SessionlogSettings): SessionlogSettings {
+  // Env var overrides for session repo configuration
+  const envRepoPath = process.env.SESSIONLOG_REPO_PATH;
+  const envRepoRemote = process.env.SESSIONLOG_REPO_REMOTE;
+
+  // Deep-merge sessionRepo: remote+directory from project (committable),
+  // localPath from local (machine-specific), env vars override both.
+  const projectRepo = project.sessionRepo;
+  const localRepo = local.sessionRepo;
+  let sessionRepo: SessionlogSettings['sessionRepo'];
+
+  if (projectRepo || localRepo || envRepoRemote || envRepoPath) {
+    sessionRepo = {
+      remote: envRepoRemote ?? localRepo?.remote ?? projectRepo?.remote,
+      directory: localRepo?.directory ?? projectRepo?.directory,
+      localPath: envRepoPath ?? localRepo?.localPath ?? projectRepo?.localPath,
+      autoPush: localRepo?.autoPush ?? projectRepo?.autoPush,
+    };
+    // Strip undefined values
+    if (!sessionRepo.remote) delete sessionRepo.remote;
+    if (!sessionRepo.directory) delete sessionRepo.directory;
+    if (!sessionRepo.localPath) delete sessionRepo.localPath;
+    if (sessionRepo.autoPush === undefined) delete sessionRepo.autoPush;
+    // If nothing meaningful is set, drop the whole object
+    if (Object.keys(sessionRepo).length === 0) sessionRepo = undefined;
+  }
+
   return {
     enabled: local.enabled !== DEFAULT_SETTINGS.enabled ? local.enabled : project.enabled,
     strategy: local.strategy !== DEFAULT_SETTINGS.strategy ? local.strategy : project.strategy,
@@ -75,7 +101,9 @@ function mergeSettings(project: SessionlogSettings, local: SessionlogSettings): 
     skipPushSessions: local.skipPushSessions ?? project.skipPushSessions,
     telemetryEnabled: local.telemetryEnabled ?? project.telemetryEnabled,
     summarizationEnabled: local.summarizationEnabled ?? project.summarizationEnabled,
-    sessionRepoPath: local.sessionRepoPath ?? project.sessionRepoPath,
+    // Legacy field — still supported for backward compat
+    sessionRepoPath: envRepoPath ?? local.sessionRepoPath ?? project.sessionRepoPath,
+    sessionRepo,
   };
 }
 

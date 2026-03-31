@@ -11,7 +11,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { getProjectID, resolveSessionRepoPath, initSessionRepo } from '../git-operations.js';
+import {
+  getProjectID,
+  resolveSessionRepoPath,
+  initSessionRepo,
+  getSessionRepoLocalPath,
+  cloneSessionRepo,
+} from '../git-operations.js';
 import { createSessionStore } from '../store/session-store.js';
 import { createCheckpointStore } from '../store/checkpoint-store.js';
 
@@ -349,5 +355,101 @@ describe('Project Namespacing', () => {
     const dir2 = `sessionlog-sessions/${id2}`;
 
     expect(dir1).not.toBe(dir2);
+  });
+});
+
+// ============================================================================
+// getSessionRepoLocalPath
+// ============================================================================
+
+describe('getSessionRepoLocalPath', () => {
+  it('should produce a path under ~/.sessionlog/repos/', () => {
+    const localPath = getSessionRepoLocalPath('git@github.com:org/sessions.git');
+    expect(localPath).toMatch(/\.sessionlog\/repos\/[a-f0-9]{12}$/);
+  });
+
+  it('should be deterministic for the same remote', () => {
+    const a = getSessionRepoLocalPath('git@github.com:org/sessions.git');
+    const b = getSessionRepoLocalPath('git@github.com:org/sessions.git');
+    expect(a).toBe(b);
+  });
+
+  it('should produce different paths for different remotes', () => {
+    const a = getSessionRepoLocalPath('git@github.com:org/sessions-a.git');
+    const b = getSessionRepoLocalPath('git@github.com:org/sessions-b.git');
+    expect(a).not.toBe(b);
+  });
+});
+
+// ============================================================================
+// cloneSessionRepo
+// ============================================================================
+
+describe('cloneSessionRepo', () => {
+  let tmpDir: string;
+  let bareRepoPath: string;
+  let savedEnv: Record<string, string | undefined>;
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clone-session-repo-test-'));
+    savedEnv = {
+      GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM,
+      GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL,
+    };
+    process.env.GIT_CONFIG_NOSYSTEM = '1';
+    process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+
+    // Create a bare repo to clone from (simulates a remote)
+    bareRepoPath = path.join(tmpDir, 'remote.git');
+    fs.mkdirSync(bareRepoPath);
+    execFileSync('git', ['init', '--bare'], { cwd: bareRepoPath });
+    // Create a non-bare repo, commit something, push to the bare repo
+    const seedPath = path.join(tmpDir, 'seed');
+    fs.mkdirSync(seedPath);
+    execFileSync('git', ['init'], { cwd: seedPath });
+    execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: seedPath });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: seedPath });
+    fs.writeFileSync(path.join(seedPath, 'README.md'), '# sessions');
+    execFileSync('git', ['add', '.'], { cwd: seedPath });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: seedPath });
+    execFileSync('git', ['remote', 'add', 'origin', bareRepoPath], { cwd: seedPath });
+    // Push the default branch (may be main or master depending on git config)
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: seedPath, encoding: 'utf-8',
+    }).trim();
+    execFileSync('git', ['push', 'origin', branch], { cwd: seedPath });
+  });
+
+  afterEach(() => {
+    for (const [key, val] of Object.entries(savedEnv)) {
+      if (val === undefined) delete process.env[key];
+      else process.env[key] = val;
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('should clone a repo from a local bare remote', async () => {
+    const clonePath = path.join(tmpDir, 'clone');
+    const result = await cloneSessionRepo(bareRepoPath, clonePath);
+
+    expect(result).toBe(path.resolve(clonePath));
+    expect(fs.existsSync(path.join(clonePath, '.git'))).toBe(true);
+    expect(fs.existsSync(path.join(clonePath, 'README.md'))).toBe(true);
+  });
+
+  it('should be idempotent — skip if already cloned', async () => {
+    const clonePath = path.join(tmpDir, 'clone');
+
+    await cloneSessionRepo(bareRepoPath, clonePath);
+    // Second call should not throw
+    const result = await cloneSessionRepo(bareRepoPath, clonePath);
+    expect(result).toBe(path.resolve(clonePath));
+  });
+
+  it('should throw GitError for unreachable remote', async () => {
+    const clonePath = path.join(tmpDir, 'bad-clone');
+    await expect(
+      cloneSessionRepo('git@nonexistent.invalid:org/repo.git', clonePath),
+    ).rejects.toThrow(/Failed to clone/);
   });
 });

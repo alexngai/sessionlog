@@ -474,6 +474,23 @@ export interface SessionChange {
 // Settings
 // ============================================================================
 
+/** Configuration for a separate git repository storing session/checkpoint data. */
+export interface SessionRepoSettings {
+  /** Git remote URL (e.g. git@github.com:org/sessions.git).
+   *  This is the portable, committable identifier — same for all team members. */
+  remote?: string;
+  /** Subdirectory within the session repo for this project's data.
+   *  Defaults to getProjectID() (e.g. "my-project-a1b2c3d4") when omitted. */
+  directory?: string;
+  /** Local filesystem path to an existing checkout of the session repo.
+   *  Machine-specific — should only be in settings.local.json or env var.
+   *  When omitted with a remote URL, auto-clones to ~/.sessionlog/repos/<hash>/. */
+  localPath?: string;
+  /** Automatically push checkpoint commits to the remote after each condensation.
+   *  Default: false (user pushes manually). */
+  autoPush?: boolean;
+}
+
 export interface SessionlogSettings {
   enabled: boolean;
   strategy: string;
@@ -481,11 +498,12 @@ export interface SessionlogSettings {
   skipPushSessions?: boolean;
   telemetryEnabled?: boolean;
   summarizationEnabled?: boolean;
-  /** Path to a separate git repository for storing session/checkpoint data.
-   *  When set, committed checkpoints and session state files are stored
-   *  in this repo instead of the project repo. Shadow branches (temporary
-   *  checkpoints) remain in the project repo. */
+  /** @deprecated Use sessionRepo instead. Local path to a separate git repository.
+   *  Kept for backward compatibility — treated as sessionRepo.localPath. */
   sessionRepoPath?: string;
+  /** Configuration for a separate git repository storing session/checkpoint data.
+   *  The remote URL is committable; local path resolution is machine-specific. */
+  sessionRepo?: SessionRepoSettings;
   /** Enable the JSONL event log (.sessionlog/events.jsonl).
    *  When true, checkpoint events are appended to the log file for
    *  consumption by external systems. Defaults to false. */
@@ -518,5 +536,7 @@ export const CHECKPOINTS_BRANCH = 'sessionlog/checkpoints/v1';
 export const SHADOW_BRANCH_PREFIX = 'sessionlog/';
 export const SHADOW_BRANCH_HASH_LENGTH = 7;
 export const SESSION_DIR_NAME = 'sessionlog-sessions';
+/** Base directory for auto-cloned session repos, relative to home dir */
+export const SESSIONLOG_REPOS_DIR = '.sessionlog/repos';
 export const MAX_CHUNK_SIZE = 50 * 1024 * 1024; // 50MB
 export const STALE_SESSION_DAYS = 7;

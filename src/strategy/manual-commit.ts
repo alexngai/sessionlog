@@ -33,6 +33,7 @@ import {
   getUntrackedFiles,
   refExists,
   pushBranch,
+  syncSessionRepoBranchAsync,
   hasUncommittedChanges,
   listBranches,
   showFile,
@@ -71,6 +72,9 @@ export interface ManualCommitStrategyConfig {
   sessionRepoCwd?: string;
   /** Override for the checkpoints branch name (e.g. project-namespaced). */
   checkpointsBranch?: string;
+  /** Automatically push checkpoint commits to the remote after condensation.
+   *  Only applies when a separate session repo is configured. Default: false. */
+  autoPush?: boolean;
   /** Enable the JSONL event log (.sessionlog/events.jsonl).
    *  When true, checkpoint events are appended after each commit. */
   eventLogEnabled?: boolean;
@@ -349,6 +353,15 @@ export function createManualCommitStrategy(config: ManualCommitStrategyConfig): 
           await saveSession(state);
         }
       }
+
+      // Auto-push checkpoint branch to remote (non-blocking, fire-and-forget).
+      // Uses pull-rebase-push to handle diverged branches in team scenarios.
+      if (config.autoPush && committedCwd) {
+        const branchExists = await refExists(`refs/heads/${cpBranch}`, committedCwd);
+        if (branchExists) {
+          syncSessionRepoBranchAsync(committedCwd, cpBranch);
+        }
+      }
     },
 
     // ======================================================================
@@ -386,10 +399,16 @@ export function createManualCommitStrategy(config: ManualCommitStrategyConfig): 
       const branchExists = await refExists(`refs/heads/${cpBranch}`, pushCwd);
       if (!branchExists) return;
 
-      try {
-        await pushBranch(remote, cpBranch, false, pushCwd);
-      } catch {
-        // Non-fatal: metadata push failure shouldn't block user push
+      if (sessionRepoCwd && pushCwd) {
+        // Separate session repo: non-blocking pull-rebase-push (handles team divergence)
+        syncSessionRepoBranchAsync(pushCwd, cpBranch);
+      } else {
+        // Project repo: blocking push alongside user's push
+        try {
+          await pushBranch(remote, cpBranch, false, pushCwd);
+        } catch {
+          // Non-fatal: metadata push failure shouldn't block user push
+        }
       }
     },
 

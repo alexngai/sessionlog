@@ -9,6 +9,7 @@
 import type { SessionState } from '../types.js';
 import { createSessionStore } from '../store/session-store.js';
 import { createCheckpointStore } from '../store/checkpoint-store.js';
+import { resolveSessionRepoConfig } from '../utils/session-repo.js';
 
 // ============================================================================
 // Types
@@ -48,8 +49,9 @@ export async function diagnose(options: DoctorOptions = {}): Promise<StuckSessio
   const cwd = options.cwd;
   const staleThreshold = options.staleThresholdMs ?? 60 * 60 * 1000; // 1 hour
 
-  const sessionStore = createSessionStore(cwd);
-  const checkpointStore = createCheckpointStore(cwd);
+  const { sessionRepoCwd, sessionsDir, checkpointsBranch } = await resolveSessionRepoConfig(cwd);
+  const sessionStore = createSessionStore(cwd, sessionsDir);
+  const checkpointStore = createCheckpointStore(cwd, sessionRepoCwd, checkpointsBranch);
 
   const sessions = await sessionStore.list();
   const temporaryBranches = await checkpointStore.listTemporary();
@@ -102,8 +104,9 @@ export async function discardSession(
   options: { cwd?: string } = {},
 ): Promise<void> {
   const cwd = options.cwd;
-  const sessionStore = createSessionStore(cwd);
-  const checkpointStore = createCheckpointStore(cwd);
+  const { sessionRepoCwd, sessionsDir, checkpointsBranch } = await resolveSessionRepoConfig(cwd);
+  const sessionStore = createSessionStore(cwd, sessionsDir);
+  const checkpointStore = createCheckpointStore(cwd, sessionRepoCwd, checkpointsBranch);
 
   const session = await sessionStore.load(sessionID);
   if (!session) return;

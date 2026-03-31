@@ -6,9 +6,10 @@
  * providing the operations needed for session and checkpoint management.
  */
 
-import { execFile, type ExecFileOptions } from 'node:child_process';
+import { execFile, spawn, type ExecFileOptions } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as crypto from 'node:crypto';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -189,6 +190,111 @@ export async function initSessionRepo(repoPath: string): Promise<string> {
  */
 export function resolveSessionRepoPath(sessionRepoPath: string, projectRoot: string): string {
   return path.resolve(projectRoot, sessionRepoPath);
+}
+
+/**
+ * Compute the default local path for an auto-cloned session repo.
+ * Uses ~/.sessionlog/repos/<sha256-first-12>/ to ensure one clone per remote URL.
+ */
+export function getSessionRepoLocalPath(remote: string): string {
+  const hash = crypto.createHash('sha256').update(remote).digest('hex').slice(0, 12);
+  return path.join(os.homedir(), '.sessionlog', 'repos', hash);
+}
+
+/**
+ * Clone a session repo from a remote URL (shallow clone).
+ * Skips if the local path already has a .git directory.
+ * Returns the absolute path to the local clone.
+ */
+export async function cloneSessionRepo(remote: string, localPath: string): Promise<string> {
+  const absPath = path.resolve(localPath);
+  try {
+    await fs.promises.access(path.join(absPath, '.git'));
+    // Already cloned
+    return absPath;
+  } catch {
+    // Need to clone
+  }
+
+  await fs.promises.mkdir(absPath, { recursive: true });
+  try {
+    await execFileAsync('git', ['clone', '--depth', '1', remote, absPath], {
+      timeout: 120000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+  } catch (error: unknown) {
+    const execError = error as { stderr?: string; message?: string };
+    throw new GitError(
+      `Failed to clone session repo ${remote}: ${execError.stderr ?? execError.message ?? 'unknown error'}`,
+      null,
+      String(execError.stderr ?? ''),
+    );
+  }
+  return absPath;
+}
+
+/**
+ * Push a branch from the session repo to its remote (blocking).
+ */
+export async function pushSessionRepo(localPath: string, branch: string): Promise<void> {
+  await git(['push', 'origin', branch], { cwd: localPath, timeout: 60000 });
+}
+
+// ============================================================================
+// Non-blocking Session Repo Sync
+// ============================================================================
+
+/**
+ * Fire-and-forget: fetch the session repo from its remote.
+ * Spawns a detached child process so the calling hook returns immediately.
+ * Failures are silently ignored — the clone works fine with stale data.
+ */
+export function fetchSessionRepoAsync(localPath: string): void {
+  try {
+    const child = spawn('git', ['fetch', '--depth', '1', 'origin'], {
+      cwd: localPath,
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+    child.unref();
+  } catch {
+    // Non-fatal: ignore spawn failures
+  }
+}
+
+/**
+ * Fire-and-forget: pull-rebase then push a branch to the session repo remote.
+ * Handles diverged branches (team scenario where multiple developers push).
+ *
+ * Strategy: fetch → rebase local onto remote → push.
+ * If any step fails, silently bail — the push will be retried next time.
+ *
+ * Spawns a detached shell process so the calling hook returns immediately.
+ */
+export function syncSessionRepoBranchAsync(localPath: string, branch: string): void {
+  try {
+    // Shell script: fetch, check if remote branch exists, rebase if so, push.
+    // All in one detached process to avoid coordination issues.
+    // Uses explicit refspec for fetch to handle branches with slashes (e.g. sessionlog/checkpoints/v1/project-id).
+    const script = [
+      `cd "${localPath}"`,
+      `git fetch --depth 1 origin "refs/heads/${branch}:refs/remotes/origin/${branch}" 2>/dev/null`,
+      `if git rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then`,
+      `  git rebase "origin/${branch}" "${branch}" 2>/dev/null || git rebase --abort 2>/dev/null`,
+      `fi`,
+      `git push origin "${branch}" 2>/dev/null`,
+    ].join(' && ');
+
+    const child = spawn('sh', ['-c', script], {
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+    child.unref();
+  } catch {
+    // Non-fatal: ignore spawn failures
+  }
 }
 
 /**

@@ -55,8 +55,14 @@ export interface EnableOptions {
   /** Opt out of anonymous analytics */
   telemetry?: boolean;
 
-  /** Path to a separate repository for session/checkpoint storage */
+  /** Path to a separate repository for session/checkpoint storage (legacy) */
   sessionRepoPath?: string;
+
+  /** Git remote URL for session repo (e.g. git@github.com:org/sessions.git) */
+  sessionRepoRemote?: string;
+
+  /** Subdirectory within the session repo for this project */
+  sessionRepoDir?: string;
 }
 
 export interface EnableResult {
@@ -131,8 +137,21 @@ export async function enable(options: EnableOptions = {}): Promise<EnableResult>
     settings.telemetryEnabled = options.telemetry;
   }
 
-  if (options.sessionRepoPath) {
-    settings.sessionRepoPath = options.sessionRepoPath;
+  // Session repo configuration:
+  // - Remote URL (sessionRepo.remote) → committed to settings.json (portable)
+  // - Legacy local path (sessionRepoPath) → settings.local.json (machine-specific)
+  if (options.sessionRepoRemote) {
+    // Remote URL goes to project settings (committable)
+    settings.sessionRepo = {
+      remote: options.sessionRepoRemote,
+      ...(options.sessionRepoDir ? { directory: options.sessionRepoDir } : {}),
+    };
+  } else if (options.sessionRepoPath) {
+    if (options.project) {
+      settings.sessionRepoPath = options.sessionRepoPath;
+    } else {
+      await saveLocalSettings({ sessionRepoPath: options.sessionRepoPath }, cwd);
+    }
   }
 
   if (options.local) {
@@ -141,8 +160,18 @@ export async function enable(options: EnableOptions = {}): Promise<EnableResult>
     await saveProjectSettings(settings, cwd);
   }
 
-  // Initialize separate session repo if configured
-  if (options.sessionRepoPath) {
+  // Initialize/clone session repo if configured
+  if (options.sessionRepoRemote) {
+    try {
+      const { cloneSessionRepo, getSessionRepoLocalPath } = await import('../git-operations.js');
+      const localPath = getSessionRepoLocalPath(options.sessionRepoRemote);
+      await cloneSessionRepo(options.sessionRepoRemote, localPath);
+    } catch (e) {
+      errors.push(
+        `Failed to clone session repo: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  } else if (options.sessionRepoPath) {
     try {
       const resolved = resolveSessionRepoPath(options.sessionRepoPath, root);
       await initSessionRepo(resolved);

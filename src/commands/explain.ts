@@ -10,6 +10,7 @@ import type { CheckpointID, CommittedMetadata, Summary, AgentType, TokenUsage } 
 import { CHECKPOINTS_BRANCH, checkpointIDPath } from '../types.js';
 import { git, catFile, lsTree } from '../git-operations.js';
 import { parseCheckpoint, parseAllSessions } from '../utils/trailers.js';
+import { resolveSessionRepoConfig, type SessionRepoConfig } from '../utils/session-repo.js';
 
 // ============================================================================
 // Types
@@ -140,12 +141,15 @@ export async function getCheckpointDetail(
   options: ExplainOptions = {},
 ): Promise<CheckpointDetail | null> {
   const cwd = options.cwd;
+  const repoConfig = await resolveSessionRepoConfig(cwd);
+  const cpBranch = repoConfig.checkpointsBranch ?? CHECKPOINTS_BRANCH;
+  const targetCwd = repoConfig.sessionRepoCwd ?? cwd;
 
   // Try to read committed metadata from the checkpoints branch
   const metadataPath = `${checkpointIDPath(checkpointID)}/metadata.json`;
 
   try {
-    const content = await catFile(`${CHECKPOINTS_BRANCH}:${metadataPath}`, cwd);
+    const content = await catFile(`${cpBranch}:${metadataPath}`, targetCwd);
     const metadata = JSON.parse(content) as CommittedMetadata;
 
     return {
@@ -177,10 +181,13 @@ export async function getCheckpointTranscript(
   options: ExplainOptions = {},
 ): Promise<Buffer | null> {
   const cwd = options.cwd;
+  const repoConfig = await resolveSessionRepoConfig(cwd);
+  const cpBranch = repoConfig.checkpointsBranch ?? CHECKPOINTS_BRANCH;
+  const targetCwd = repoConfig.sessionRepoCwd ?? cwd;
   const transcriptPath = `${checkpointIDPath(checkpointID)}/transcript`;
 
   try {
-    const content = await catFile(`${CHECKPOINTS_BRANCH}:${transcriptPath}`, cwd);
+    const content = await catFile(`${cpBranch}:${transcriptPath}`, targetCwd);
     return Buffer.from(content, 'utf-8');
   } catch {
     return null;
@@ -235,6 +242,9 @@ export async function findCheckpointByPrefix(
   options: ExplainOptions = {},
 ): Promise<CheckpointID | null> {
   const cwd = options.cwd;
+  const repoConfig = await resolveSessionRepoConfig(cwd);
+  const cpBranch = repoConfig.checkpointsBranch ?? CHECKPOINTS_BRANCH;
+  const targetCwd = repoConfig.sessionRepoCwd ?? cwd;
 
   // For full IDs, just return directly
   if (prefix.length === 12) return prefix as CheckpointID;
@@ -246,7 +256,7 @@ export async function findCheckpointByPrefix(
   const remainder = prefix.slice(2);
 
   try {
-    const entries = await lsTree(CHECKPOINTS_BRANCH, shardPrefix, cwd);
+    const entries = await lsTree(cpBranch, shardPrefix, targetCwd);
 
     for (const entry of entries) {
       if (entry.name.startsWith(remainder)) {
