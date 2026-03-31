@@ -1,6 +1,6 @@
 {
   "name": "sessionlog",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Session tracking and checkpoint management for AI coding agents",
   "type": "module",
   "main": "./dist/index.js",
