@@ -512,6 +512,25 @@ export interface SessionlogSettings {
    *  When set, the log is pruned to this many entries after each write.
    *  When undefined or 0, all events are kept. */
   eventLogMaxEvents?: number;
+  /** OpenTelemetry integration configuration.
+   *  When otel.enabled is true, lifecycle events are exported as
+   *  OTel traces, metrics, and logs via OTLP. Requires optional
+   *  @opentelemetry/* peer dependencies to be installed. */
+  otel?: OTelSettingsConfig;
+}
+
+export interface OTelSettingsConfig {
+  enabled: boolean;
+  endpoint?: string;
+  protocol?: 'grpc' | 'http/protobuf' | 'http/json';
+  headers?: Record<string, string>;
+  resourceAttributes?: Record<string, string>;
+  signals?: { traces?: boolean; metrics?: boolean; logs?: boolean };
+  sampling?: {
+    rate?: number;
+    alwaysTraceFileThreshold?: number;
+    alwaysTraceTokenThreshold?: number;
+  };
 }
 
 export const DEFAULT_SETTINGS: SessionlogSettings = {
