@@ -13,6 +13,7 @@ This package provides the core library used to build session tracking, checkpoin
 - **Resume** — pick up agent sessions from any branch
 - **Secret redaction** — multi-layer detection (entropy analysis + 30+ patterns) before storing transcripts
 - **AI summarization** — generate structured summaries of agent sessions
+- **OpenTelemetry integration** — optional remote monitoring via OTLP (traces, metrics, logs)
 - **Zero production dependencies** — only Node.js and Git required
 
 ## Installation
@@ -345,6 +346,112 @@ const handler = createLifecycleHandler({
 await handler.dispatch(agent, event);
 ```
 
+## OpenTelemetry Integration
+
+Sessionlog can export session lifecycle data as OpenTelemetry signals for remote monitoring via Jaeger, Grafana, Datadog, or any OTLP-compatible backend.
+
+OTel is fully optional — the `@opentelemetry/*` packages are optional peer dependencies that are only loaded when `otel.enabled` is `true`. Sessionlog remains zero-dep when OTel is not used.
+
+### Setup
+
+Install the optional OTel peer dependencies:
+
+```bash
+npm install @opentelemetry/api @opentelemetry/sdk-trace-node \
+  @opentelemetry/sdk-trace-base @opentelemetry/sdk-metrics \
+  @opentelemetry/sdk-logs @opentelemetry/exporter-trace-otlp-proto \
+  @opentelemetry/exporter-metrics-otlp-proto \
+  @opentelemetry/exporter-logs-otlp-proto @opentelemetry/resources
+```
+
+Configure in `.sessionlog/settings.json`:
+
+```jsonc
+{
+  "enabled": true,
+  "strategy": "manual-commit",
+  "otel": {
+    "enabled": true,
+    "endpoint": "http://localhost:4318",
+    "protocol": "http/protobuf",
+    "headers": { "x-api-key": "your-key" },
+    "resourceAttributes": { "repo": "my-app", "team": "platform" },
+    "logSensitiveData": false,
+    "signals": { "traces": true, "metrics": true, "logs": true },
+    "sampling": {
+      "rate": 1.0,
+      "alwaysTraceFileThreshold": 20,
+      "alwaysTraceTokenThreshold": 100000
+    }
+  }
+}
+```
+
+### Programmatic Usage
+
+```typescript
+import { createLifecycleHandler, createSessionStore, createCheckpointStore, loadSettings } from 'sessionlog';
+import { initTelemetry, wrapWithTelemetry } from 'sessionlog/telemetry';
+
+const settings = await loadSettings();
+const sessionStore = createSessionStore(cwd);
+const checkpointStore = createCheckpointStore(cwd);
+
+// Initialize OTel (returns null if disabled or SDK not installed)
+const exporter = await initTelemetry(settings.otel ?? { enabled: false });
+
+// Create lifecycle handler with optional telemetry wrapper
+let lifecycle = createLifecycleHandler({ sessionStore, checkpointStore });
+if (exporter) {
+  lifecycle = wrapWithTelemetry({ inner: lifecycle, exporter, sessionStore });
+}
+
+// Use as normal — telemetry is transparent
+await lifecycle.dispatch(agent, event);
+```
+
+### Signal Mapping
+
+| Sessionlog Concept | OTel Signal | Span/Metric Name |
+|-|-|-|
+| Session | Trace (root span) | `session {agentType}` |
+| Turn | Span (child) | `turn {stepCount}` |
+| Task | Span (child) | `task {subject}` |
+| Subagent | Span (child) | `subagent {type}` |
+| Token usage | Counters | `sessionlog.tokens.input`, `.output`, `.cache_read`, `.cache_creation` |
+| Token usage | Histogram | `sessionlog.turn.token_usage` |
+| API calls | Counter | `sessionlog.api_calls` |
+| Turn count | Counter | `sessionlog.turns` |
+| Turn duration | Histogram | `sessionlog.turn.duration_ms` |
+| Session duration | Histogram | `sessionlog.session.duration_seconds` |
+| Files modified | Histogram | `sessionlog.files_touched` |
+| Checkpoint steps | Counter | `sessionlog.steps` |
+| Skill invocations | Counter | `sessionlog.skill.call` |
+| Process start | Counter | `sessionlog.process.start` |
+| User prompt | Span event + Log | `sessionlog.user_prompt` |
+| Skill use | Span event + Log | `sessionlog.skill_use` |
+| Plan mode | Span events | `sessionlog.plan_mode_enter` / `sessionlog.plan_mode_exit` |
+| Compaction | Span event + Log | `sessionlog.compaction` |
+
+### Privacy
+
+Sensitive data (prompt text, tool arguments) never appears on trace spans. It is only included in log records when `logSensitiveData` is explicitly set to `true`. This dual-path model matches the approach used by [OpenAI Codex CLI](https://github.com/openai/codex).
+
+### Custom Exporter
+
+Implement the `TelemetryExporter` interface to send data to a custom backend:
+
+```typescript
+import type { TelemetryExporter } from 'sessionlog/telemetry';
+
+const myExporter: TelemetryExporter = {
+  emit(event) { /* send to your backend */ },
+  async shutdown() { /* flush */ },
+};
+
+lifecycle = wrapWithTelemetry({ inner: lifecycle, exporter: myExporter, sessionStore });
+```
+
 ## Security
 
 Redact secrets before storing transcripts:
@@ -392,6 +499,24 @@ const enabled = await isEnabled('/path/to/repo');
 | `skipPushSessions` | boolean | `false` | Disable auto-push of checkpoints branch |
 | `telemetryEnabled` | boolean | `false` | Anonymous usage analytics |
 | `summarizationEnabled` | boolean | `false` | AI-generated summaries on commit |
+| `eventLogEnabled` | boolean | `false` | Write checkpoint events to `.sessionlog/events.jsonl` |
+| `eventLogMaxEvents` | number | `0` | Retain last N events (0 = keep all) |
+| `otel` | object | — | OpenTelemetry configuration (see [OpenTelemetry Integration](#opentelemetry-integration)) |
+
+#### OTel Configuration Options
+
+| Option | Type | Default | Purpose |
+|--------|------|---------|---------|
+| `otel.enabled` | boolean | — | Enable OTLP export of traces, metrics, and logs |
+| `otel.endpoint` | string | `OTEL_EXPORTER_OTLP_ENDPOINT` or `http://localhost:4318` | OTLP collector endpoint |
+| `otel.protocol` | string | `'http/protobuf'` | Transport: `grpc`, `http/protobuf`, or `http/json` |
+| `otel.headers` | object | — | Headers on every OTLP request (e.g. API keys) |
+| `otel.resourceAttributes` | object | — | Attributes merged into every signal |
+| `otel.logSensitiveData` | boolean | `false` | Include prompt text and tool args in log records |
+| `otel.signals` | object | all `true` | Toggle individual signal types: `{ traces, metrics, logs }` |
+| `otel.sampling.rate` | number | `1.0` | Fraction of sessions to trace (0.0–1.0) |
+| `otel.sampling.alwaysTraceFileThreshold` | number | — | Always trace sessions touching ≥ N files |
+| `otel.sampling.alwaysTraceTokenThreshold` | number | — | Always trace sessions using ≥ N tokens |
 
 ## Summarization
 
