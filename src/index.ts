@@ -60,6 +60,7 @@ export type {
   UpdateCommittedOptions,
   SessionChange,
   SessionlogSettings,
+  OTelSettingsConfig,
 } from './types.js';
 
 export {

@@ -10,7 +10,33 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry/index.d.ts",
+      "import": "./dist/telemetry/index.js"
     }
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-node": "^1.30.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@opentelemetry/sdk-metrics": "^1.30.0",
+    "@opentelemetry/sdk-logs": "^0.57.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.57.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.57.0",
+    "@opentelemetry/exporter-logs-otlp-proto": "^0.57.0",
+    "@opentelemetry/resources": "^1.30.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": { "optional": true },
+    "@opentelemetry/sdk-trace-node": { "optional": true },
+    "@opentelemetry/sdk-trace-base": { "optional": true },
+    "@opentelemetry/sdk-metrics": { "optional": true },
+    "@opentelemetry/sdk-logs": { "optional": true },
+    "@opentelemetry/exporter-trace-otlp-proto": { "optional": true },
+    "@opentelemetry/exporter-metrics-otlp-proto": { "optional": true },
+    "@opentelemetry/exporter-logs-otlp-proto": { "optional": true },
+    "@opentelemetry/resources": { "optional": true }
   },
   "bin": {
     "sessionlog": "./dist/cli.js"
