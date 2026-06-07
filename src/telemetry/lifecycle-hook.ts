@@ -30,6 +30,12 @@ export interface TelemetryLifecycleConfig {
   sessionStore: SessionStore;
 }
 
+interface TurnSnapshot {
+  inputTokens: number;
+  outputTokens: number;
+  startTime: number;
+}
+
 /**
  * Wrap a LifecycleHandler with telemetry emission.
  *
@@ -41,20 +47,19 @@ export interface TelemetryLifecycleConfig {
 export function wrapWithTelemetry(config: TelemetryLifecycleConfig): LifecycleHandler {
   const { inner, exporter, sessionStore } = config;
 
-  // Track per-turn token deltas for TurnEnd metrics
-  const preTokenSnapshots = new Map<string, { inputTokens: number; outputTokens: number }>();
+  // Track per-turn state for delta calculation
+  const turnSnapshots = new Map<string, TurnSnapshot>();
 
   return {
     async dispatch(agent: Agent, event: Event): Promise<void> {
-      // Snapshot pre-turn token state for delta calculation
+      // Snapshot pre-turn state for delta calculation
       if (event.type === EventType.TurnStart) {
         const state = await sessionStore.load(event.sessionID);
-        if (state?.tokenUsage) {
-          preTokenSnapshots.set(event.sessionID, {
-            inputTokens: state.tokenUsage.inputTokens,
-            outputTokens: state.tokenUsage.outputTokens,
-          });
-        }
+        turnSnapshots.set(event.sessionID, {
+          inputTokens: state?.tokenUsage?.inputTokens ?? 0,
+          outputTokens: state?.tokenUsage?.outputTokens ?? 0,
+          startTime: Date.now(),
+        });
       }
 
       // Delegate to the real lifecycle handler
@@ -65,17 +70,17 @@ export function wrapWithTelemetry(config: TelemetryLifecycleConfig): LifecycleHa
       if (!state) return;
 
       // Build and emit telemetry event
-      const telemetryEvent = buildTelemetryEvent(event, state, preTokenSnapshots);
+      const telemetryEvent = buildTelemetryEvent(event, state, turnSnapshots);
       exporter.emit(telemetryEvent);
 
       // Cleanup
       if (event.type === EventType.TurnEnd) {
-        preTokenSnapshots.delete(event.sessionID);
+        turnSnapshots.delete(event.sessionID);
       }
 
       // Flush on session end
       if (event.type === EventType.SessionEnd) {
-        preTokenSnapshots.delete(event.sessionID);
+        turnSnapshots.delete(event.sessionID);
         await exporter.shutdown().catch(() => {});
       }
     },
@@ -85,7 +90,7 @@ export function wrapWithTelemetry(config: TelemetryLifecycleConfig): LifecycleHa
 function buildTelemetryEvent(
   event: Event,
   session: SessionState,
-  preTokenSnapshots: Map<string, { inputTokens: number; outputTokens: number }>,
+  turnSnapshots: Map<string, TurnSnapshot>,
 ): TelemetryEvent {
   const meta: TelemetryEventMeta = {};
 
@@ -93,22 +98,28 @@ function buildTelemetryEvent(
     case EventType.TurnStart:
       meta.turnID = session.turnID;
       meta.prompt = event.prompt?.slice(0, 500);
+      meta.promptLength = event.prompt?.length;
       break;
 
     case EventType.TurnEnd: {
       meta.turnID = session.turnID;
       meta.turnFilesModified = session.filesTouched;
 
-      // Calculate token delta for this turn
-      const pre = preTokenSnapshots.get(event.sessionID);
-      if (session.tokenUsage && pre) {
-        meta.turnTokenUsage = {
-          inputTokens: session.tokenUsage.inputTokens - pre.inputTokens,
-          outputTokens: session.tokenUsage.outputTokens - pre.outputTokens,
-          cacheCreationTokens: session.tokenUsage.cacheCreationTokens,
-          cacheReadTokens: session.tokenUsage.cacheReadTokens,
-          apiCallCount: session.tokenUsage.apiCallCount,
-        };
+      // Calculate turn wall-clock duration
+      const snapshot = turnSnapshots.get(event.sessionID);
+      if (snapshot) {
+        meta.turnDurationMs = Date.now() - snapshot.startTime;
+
+        // Calculate token delta for this turn
+        if (session.tokenUsage) {
+          meta.turnTokenUsage = {
+            inputTokens: session.tokenUsage.inputTokens - snapshot.inputTokens,
+            outputTokens: session.tokenUsage.outputTokens - snapshot.outputTokens,
+            cacheCreationTokens: session.tokenUsage.cacheCreationTokens,
+            cacheReadTokens: session.tokenUsage.cacheReadTokens,
+            apiCallCount: session.tokenUsage.apiCallCount,
+          };
+        }
       } else if (session.tokenUsage) {
         meta.turnTokenUsage = session.tokenUsage;
       }
@@ -130,10 +141,14 @@ function buildTelemetryEvent(
 
     case EventType.SkillUse:
       meta.skillName = event.skillName;
+      meta.skillArgs = event.skillArgs;
       break;
 
     case EventType.PlanModeExit:
       meta.planFilePath = event.planFilePath;
+      break;
+
+    case EventType.Compaction:
       break;
   }
 

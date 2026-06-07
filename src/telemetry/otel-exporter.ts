@@ -2,11 +2,20 @@
  * OpenTelemetry Exporter Implementation
  *
  * Maps sessionlog lifecycle events to OTel signals:
- *   - Sessions  → Traces  (root span per session)
- *   - Turns     → Spans   (child span per turn within the session trace)
- *   - Tasks     → Spans   (child span per subagent task)
- *   - Tokens    → Metrics (counters/histograms per turn)
- *   - Events    → Logs    (phase transitions, skill use, plan mode)
+ *   - Sessions    → Traces  (root span per session)
+ *   - Turns       → Spans   (child span per turn within the session trace)
+ *   - Tasks       → Spans   (child span per subagent task)
+ *   - Tokens      → Metrics (counters + histograms per turn)
+ *   - Skill use   → Metrics (counter) + Span event + Log record
+ *   - Plan mode   → Span events
+ *   - Compaction  → Span event
+ *   - User prompt → Span event (length only) + Log record (full text, opt-in)
+ *
+ * Privacy model (aligned with Codex):
+ *   - Traces (spans + span events) contain only aggregate/structural data.
+ *     No prompt text, tool arguments, or output content appears on spans.
+ *   - Logs may contain sensitive text when logSensitiveData is true.
+ *   - This split matches the codex dual-path: trace_safe vs log_only.
  *
  * All @opentelemetry/* imports are dynamic so this file is never loaded
  * unless OTel is explicitly enabled. The OTel SDK packages are optional
@@ -30,6 +39,7 @@ const { version: PKG_VERSION } = require('../../package.json') as { version: str
 // ============================================================================
 
 type OTelAPI = typeof import('@opentelemetry/api');
+type SpanStatusCode = import('@opentelemetry/api').SpanStatusCode;
 type Tracer = import('@opentelemetry/api').Tracer;
 type Span = import('@opentelemetry/api').Span;
 type Meter = import('@opentelemetry/api').Meter;
@@ -47,6 +57,7 @@ type LoggerProvider = import('@opentelemetry/sdk-logs').LoggerProvider;
 interface SessionTrace {
   rootSpan: Span;
   activeTurnSpan?: Span;
+  turnStartTime?: number;
   taskSpans: Map<string, Span>;
   startTime: number;
 }
@@ -57,6 +68,7 @@ interface SessionTrace {
 
 export async function createOTelExporter(settings: OTelSettings): Promise<TelemetryExporter> {
   const api = await loadOTelAPI();
+  const spanStatusCode = (await import('@opentelemetry/api')).SpanStatusCode;
   const { tracerProvider, meterProvider, loggerProvider } = await initProviders(settings);
 
   const tracer: Tracer = tracerProvider.getTracer('sessionlog', getVersion());
@@ -64,6 +76,7 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
   const logger: Logger = loggerProvider.getLogger('sessionlog', getVersion());
 
   const sessions = new Map<string, SessionTrace>();
+  let processStartRecorded = false;
 
   // --- Metrics instruments (created once, reused) ---
   const counters = {
@@ -88,6 +101,12 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
     steps: meter.createCounter(MetricNames.STEPS, {
       description: 'Total checkpoint steps',
     }),
+    processStart: meter.createCounter(MetricNames.PROCESS_START, {
+      description: 'Process start events',
+    }),
+    skillCall: meter.createCounter(MetricNames.SKILL_CALL, {
+      description: 'Total skill/tool invocations',
+    }),
   } satisfies Record<string, Counter>;
 
   const histograms = {
@@ -97,6 +116,13 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
     }),
     filesTouched: meter.createHistogram(MetricNames.FILES_TOUCHED, {
       description: 'Files modified per turn',
+    }),
+    turnDuration: meter.createHistogram(MetricNames.TURN_DURATION, {
+      description: 'Turn wall-clock duration',
+      unit: 'ms',
+    }),
+    turnTokenUsage: meter.createHistogram(MetricNames.TURN_TOKEN_USAGE, {
+      description: 'Total tokens (input + output) per turn',
     }),
   } satisfies Record<string, Histogram>;
 
@@ -111,6 +137,12 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
   // --- Emit handlers by event type ---
 
   function onSessionStart(event: TelemetryEvent): void {
+    // Record process start once per exporter lifetime
+    if (!processStartRecorded) {
+      counters.processStart.add(1, metricAttrs(event));
+      processStartRecorded = true;
+    }
+
     const span = tracer.startSpan(`session ${event.session.agentType}`, {
       attributes: {
         [SemanticAttributes.SESSION_ID]: event.session.sessionID,
@@ -124,6 +156,16 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
       rootSpan: span,
       taskSpans: new Map(),
       startTime: Date.now(),
+    });
+
+    logger.emit({
+      body: 'Session started',
+      attributes: {
+        'event.name': 'sessionlog.session_start',
+        [SemanticAttributes.SESSION_ID]: event.session.sessionID,
+        [SemanticAttributes.SESSION_AGENT]: event.session.agentType,
+        [SemanticAttributes.SESSION_BASE_COMMIT]: event.session.baseCommit,
+      },
     });
   }
 
@@ -143,11 +185,32 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
       ctx,
     );
 
-    if (event.meta?.prompt) {
-      turnSpan.setAttribute(SemanticAttributes.SESSION_FIRST_PROMPT, event.meta.prompt);
-    }
-
     trace.activeTurnSpan = turnSpan;
+    trace.turnStartTime = Date.now();
+
+    // User prompt — trace-safe: length only (no text on spans)
+    if (event.meta?.prompt) {
+      const promptLength = event.meta.promptLength ?? event.meta.prompt.length;
+      turnSpan.addEvent('sessionlog.user_prompt', {
+        [SemanticAttributes.PROMPT_LENGTH]: promptLength,
+      });
+
+      // Log-only: include full prompt text if configured
+      logger.emit({
+        body: settings.logSensitiveData
+          ? `User prompt: ${event.meta.prompt}`
+          : `User prompt [${promptLength} chars]`,
+        attributes: {
+          'event.name': 'sessionlog.user_prompt',
+          [SemanticAttributes.SESSION_ID]: event.session.sessionID,
+          [SemanticAttributes.TURN_ID]: event.meta.turnID ?? '',
+          [SemanticAttributes.PROMPT_LENGTH]: promptLength,
+          ...(settings.logSensitiveData
+            ? { [SemanticAttributes.PROMPT_TEXT]: event.meta.prompt }
+            : {}),
+        },
+      });
+    }
   }
 
   function onTurnEnd(event: TelemetryEvent): void {
@@ -157,7 +220,15 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
     const turnSpan = trace.activeTurnSpan;
     const attrs = metricAttrs(event);
 
-    // Record files touched
+    // Turn duration
+    const turnDurationMs = event.meta?.turnDurationMs
+      ?? (trace.turnStartTime ? Date.now() - trace.turnStartTime : undefined);
+    if (turnDurationMs != null) {
+      turnSpan.setAttribute(SemanticAttributes.TURN_DURATION_MS, turnDurationMs);
+      histograms.turnDuration.record(turnDurationMs, attrs);
+    }
+
+    // Files touched
     const filesCount = event.meta?.turnFilesModified?.length ?? 0;
     turnSpan.setAttribute(SemanticAttributes.TURN_FILES_COUNT, filesCount);
     if (event.meta?.turnFilesModified) {
@@ -168,12 +239,13 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
     }
     histograms.filesTouched.record(filesCount, attrs);
 
-    // Record token usage
+    // Token usage
     const tokens = event.meta?.turnTokenUsage;
     if (tokens) {
       turnSpan.setAttribute(SemanticAttributes.TOKENS_INPUT, tokens.inputTokens);
       turnSpan.setAttribute(SemanticAttributes.TOKENS_OUTPUT, tokens.outputTokens);
       turnSpan.setAttribute(SemanticAttributes.TOKENS_CACHE_READ, tokens.cacheReadTokens);
+      turnSpan.setAttribute(SemanticAttributes.TOKENS_CACHE_CREATION, tokens.cacheCreationTokens);
       turnSpan.setAttribute(SemanticAttributes.API_CALL_COUNT, tokens.apiCallCount);
 
       counters.tokensInput.add(tokens.inputTokens, attrs);
@@ -181,11 +253,16 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
       counters.tokensCacheRead.add(tokens.cacheReadTokens, attrs);
       counters.tokensCacheCreation.add(tokens.cacheCreationTokens, attrs);
       counters.apiCalls.add(tokens.apiCallCount, attrs);
+
+      // Per-turn token distribution histogram
+      const totalTurnTokens = tokens.inputTokens + tokens.outputTokens;
+      histograms.turnTokenUsage.record(totalTurnTokens, attrs);
     }
 
     counters.turns.add(1, attrs);
     turnSpan.end();
     trace.activeTurnSpan = undefined;
+    trace.turnStartTime = undefined;
   }
 
   function onSessionEnd(event: TelemetryEvent): void {
@@ -201,6 +278,8 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
     }
 
     const durationS = (Date.now() - trace.startTime) / 1000;
+    const attrs = metricAttrs(event);
+
     trace.rootSpan.setAttribute(SemanticAttributes.SESSION_PHASE, 'ended');
     trace.rootSpan.setAttribute('sessionlog.session.step_count', event.session.stepCount);
     trace.rootSpan.setAttribute(
@@ -208,8 +287,28 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
       event.session.filesTouched.length,
     );
 
-    histograms.sessionDuration.record(durationS, metricAttrs(event));
-    counters.steps.add(event.session.stepCount, metricAttrs(event));
+    // Set final token totals on root span
+    if (event.session.tokenUsage) {
+      trace.rootSpan.setAttribute(
+        SemanticAttributes.TOKENS_INPUT,
+        event.session.tokenUsage.inputTokens,
+      );
+      trace.rootSpan.setAttribute(
+        SemanticAttributes.TOKENS_OUTPUT,
+        event.session.tokenUsage.outputTokens,
+      );
+    }
+
+    // Set error status if the session has an error
+    if (event.meta?.errorMessage) {
+      trace.rootSpan.setStatus({
+        code: spanStatusCode.ERROR,
+        message: event.meta.errorMessage,
+      });
+    }
+
+    histograms.sessionDuration.record(durationS, attrs);
+    counters.steps.add(event.session.stepCount, attrs);
 
     trace.rootSpan.end();
     sessions.delete(event.session.sessionID);
@@ -259,17 +358,33 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
   function onSkillUse(event: TelemetryEvent): void {
     const trace = sessions.get(event.session.sessionID);
     const span = trace?.activeTurnSpan ?? trace?.rootSpan;
-    if (!span) return;
 
-    span.addEvent('skill_use', {
-      [SemanticAttributes.SKILL_NAME]: event.meta?.skillName ?? '',
+    const skillName = event.meta?.skillName ?? '';
+    const attrs = metricAttrs(event);
+
+    // Trace-safe: span event with name only (no args)
+    span?.addEvent('sessionlog.skill_use', {
+      [SemanticAttributes.SKILL_NAME]: skillName,
     });
 
+    // Metric: counter per skill invocation
+    counters.skillCall.add(1, {
+      ...attrs,
+      [SemanticAttributes.SKILL_NAME]: skillName,
+    });
+
+    // Log record: includes args if sensitive logging is enabled
     logger.emit({
-      body: `Skill used: ${event.meta?.skillName}`,
+      body: settings.logSensitiveData
+        ? `Skill used: ${skillName}(${event.meta?.skillArgs ?? ''})`
+        : `Skill used: ${skillName}`,
       attributes: {
+        'event.name': 'sessionlog.skill_use',
         [SemanticAttributes.SESSION_ID]: event.session.sessionID,
-        [SemanticAttributes.SKILL_NAME]: event.meta?.skillName ?? '',
+        [SemanticAttributes.SKILL_NAME]: skillName,
+        ...(settings.logSensitiveData && event.meta?.skillArgs
+          ? { [SemanticAttributes.SKILL_ARGS]: event.meta.skillArgs }
+          : {}),
       },
     });
   }
@@ -277,14 +392,31 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
   function onPlanModeEnter(event: TelemetryEvent): void {
     const trace = sessions.get(event.session.sessionID);
     const span = trace?.activeTurnSpan ?? trace?.rootSpan;
-    span?.addEvent('plan_mode_enter');
+    span?.addEvent('sessionlog.plan_mode_enter');
+
+    logger.emit({
+      body: 'Plan mode entered',
+      attributes: {
+        'event.name': 'sessionlog.plan_mode_enter',
+        [SemanticAttributes.SESSION_ID]: event.session.sessionID,
+      },
+    });
   }
 
   function onPlanModeExit(event: TelemetryEvent): void {
     const trace = sessions.get(event.session.sessionID);
     const span = trace?.activeTurnSpan ?? trace?.rootSpan;
-    span?.addEvent('plan_mode_exit', {
+    span?.addEvent('sessionlog.plan_mode_exit', {
       [SemanticAttributes.PLAN_FILE]: event.meta?.planFilePath ?? '',
+    });
+
+    logger.emit({
+      body: `Plan mode exited${event.meta?.planFilePath ? `: ${event.meta.planFilePath}` : ''}`,
+      attributes: {
+        'event.name': 'sessionlog.plan_mode_exit',
+        [SemanticAttributes.SESSION_ID]: event.session.sessionID,
+        [SemanticAttributes.PLAN_FILE]: event.meta?.planFilePath ?? '',
+      },
     });
   }
 
@@ -322,6 +454,29 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
     trace.taskSpans.delete(`subagent:${event.meta.toolUseID}`);
   }
 
+  function onCompaction(event: TelemetryEvent): void {
+    const trace = sessions.get(event.session.sessionID);
+    const span = trace?.activeTurnSpan ?? trace?.rootSpan;
+
+    span?.addEvent('sessionlog.compaction', {
+      [SemanticAttributes.SESSION_ID]: event.session.sessionID,
+      ...(event.meta?.checkpointID
+        ? { [SemanticAttributes.CHECKPOINT_ID]: event.meta.checkpointID }
+        : {}),
+      ...(event.meta?.checkpointsCount != null
+        ? { [SemanticAttributes.CHECKPOINT_COUNT]: event.meta.checkpointsCount }
+        : {}),
+    });
+
+    logger.emit({
+      body: `Transcript compacted${event.meta?.checkpointID ? ` (checkpoint: ${event.meta.checkpointID})` : ''}`,
+      attributes: {
+        'event.name': 'sessionlog.compaction',
+        [SemanticAttributes.SESSION_ID]: event.session.sessionID,
+      },
+    });
+  }
+
   // --- Dispatch table ---
 
   const handlers: Partial<Record<EventType, (event: TelemetryEvent) => void>> = {
@@ -336,6 +491,7 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
     [EventType.PlanModeExit]: onPlanModeExit,
     [EventType.SubagentStart]: onSubagentStart,
     [EventType.SubagentEnd]: onSubagentEnd,
+    [EventType.Compaction]: onCompaction,
   };
 
   // --- Public interface ---

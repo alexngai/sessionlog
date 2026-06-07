@@ -9,6 +9,7 @@
  *   - Zero impact when disabled — no imports, no overhead
  *   - Pluggable: users can supply their own TelemetryExporter
  *   - Redaction runs before any data leaves the process
+ *   - Privacy: sensitive data (prompts, tool args) only in logs, never traces
  */
 
 import type { EventType, SessionState, TokenUsage } from '../types.js';
@@ -54,6 +55,13 @@ export interface OTelSettings {
    * Controls which sessions generate trace data to manage cost.
    */
   sampling?: SamplingConfig;
+
+  /**
+   * When true, include full prompt text and tool arguments in log records.
+   * Traces never include sensitive text regardless of this setting.
+   * Default: false.
+   */
+  logSensitiveData?: boolean;
 }
 
 export interface SamplingConfig {
@@ -97,11 +105,17 @@ export interface TelemetryEventMeta {
   /** User prompt text (TurnStart only, already truncated to 500 chars). */
   prompt?: string;
 
+  /** Character length of the full user prompt (before truncation). */
+  promptLength?: number;
+
   /** Token usage delta for this turn (TurnEnd only). */
   turnTokenUsage?: TokenUsage;
 
   /** Files modified in this turn (TurnEnd only). */
   turnFilesModified?: string[];
+
+  /** Turn wall-clock duration in milliseconds (TurnEnd only). */
+  turnDurationMs?: number;
 
   /** Task info for TaskCreate/TaskUpdate events. */
   taskID?: string;
@@ -114,9 +128,17 @@ export interface TelemetryEventMeta {
 
   /** Skill info for SkillUse events. */
   skillName?: string;
+  skillArgs?: string;
 
   /** Plan mode info. */
   planFilePath?: string;
+
+  /** Error message when an event indicates failure. */
+  errorMessage?: string;
+
+  /** Checkpoint committed info (Compaction / postCommit context). */
+  checkpointID?: string;
+  checkpointsCount?: number;
 }
 
 // ============================================================================
@@ -158,46 +180,61 @@ export type TelemetryExporterFactory = (settings: OTelSettings) => Promise<Telem
  * Attribute keys following OTel semantic conventions.
  * Prefixed with `sessionlog.` for project-specific attributes,
  * and using `gen_ai.*` where aligned with the OTel GenAI SIG.
+ *
+ * Privacy rule: attributes marked "trace-safe" appear on spans.
+ * Attributes marked "log-only" appear only in log records.
  */
 export const SemanticAttributes = {
-  // Resource-level
+  // --- Resource-level ---
   SERVICE_NAME: 'service.name',
   SERVICE_VERSION: 'service.version',
 
-  // Session (trace-level)
+  // --- Session (trace-level, trace-safe) ---
   SESSION_ID: 'sessionlog.session.id',
   SESSION_PHASE: 'sessionlog.session.phase',
   SESSION_AGENT: 'gen_ai.system',
   SESSION_BASE_COMMIT: 'sessionlog.session.base_commit',
   SESSION_BRANCH: 'sessionlog.session.branch',
   SESSION_REPO: 'sessionlog.session.repo',
-  SESSION_FIRST_PROMPT: 'sessionlog.session.first_prompt',
 
-  // Turn (span-level)
+  // --- Turn (span-level, trace-safe) ---
   TURN_ID: 'sessionlog.turn.id',
   TURN_STEP_INDEX: 'sessionlog.turn.step_index',
   TURN_FILES_MODIFIED: 'sessionlog.turn.files_modified',
   TURN_FILES_COUNT: 'sessionlog.turn.files_count',
+  TURN_DURATION_MS: 'sessionlog.turn.duration_ms',
 
-  // Token usage (metric attributes + span attributes)
+  // --- Token usage (trace-safe, on spans + metrics) ---
   TOKENS_INPUT: 'gen_ai.usage.input_tokens',
   TOKENS_OUTPUT: 'gen_ai.usage.output_tokens',
-  TOKENS_CACHE_READ: 'sessionlog.tokens.cache_read',
+  TOKENS_CACHE_READ: 'gen_ai.usage.cache_read.input_tokens',
   TOKENS_CACHE_CREATION: 'sessionlog.tokens.cache_creation',
   API_CALL_COUNT: 'sessionlog.api_call_count',
 
-  // Task/subagent (child span)
+  // --- User prompt (trace-safe: length only; log-only: text) ---
+  PROMPT_LENGTH: 'sessionlog.prompt.length',
+  PROMPT_TEXT: 'sessionlog.prompt.text',
+
+  // --- Task/subagent (child span, trace-safe) ---
   TASK_ID: 'sessionlog.task.id',
   TASK_SUBJECT: 'sessionlog.task.subject',
   TASK_STATUS: 'sessionlog.task.status',
   SUBAGENT_TYPE: 'sessionlog.subagent.type',
   TOOL_USE_ID: 'sessionlog.tool_use_id',
 
-  // Skill (span event)
+  // --- Skill / tool (trace-safe: name; log-only: args) ---
   SKILL_NAME: 'sessionlog.skill.name',
+  SKILL_ARGS: 'sessionlog.skill.args',
 
-  // Plan mode (span event)
+  // --- Plan mode (span event, trace-safe) ---
   PLAN_FILE: 'sessionlog.plan.file_path',
+
+  // --- Checkpoint (trace-safe) ---
+  CHECKPOINT_ID: 'sessionlog.checkpoint.id',
+  CHECKPOINT_COUNT: 'sessionlog.checkpoint.count',
+
+  // --- Error (trace-safe) ---
+  ERROR_MESSAGE: 'error.message',
 } as const;
 
 // ============================================================================
@@ -205,13 +242,30 @@ export const SemanticAttributes = {
 // ============================================================================
 
 export const MetricNames = {
+  // Token counters
   TOKENS_INPUT: 'sessionlog.tokens.input',
   TOKENS_OUTPUT: 'sessionlog.tokens.output',
   TOKENS_CACHE_READ: 'sessionlog.tokens.cache_read',
   TOKENS_CACHE_CREATION: 'sessionlog.tokens.cache_creation',
   API_CALLS: 'sessionlog.api_calls',
+
+  // Token histogram (per-turn distribution)
+  TURN_TOKEN_USAGE: 'sessionlog.turn.token_usage',
+
+  // Session-level
   SESSION_DURATION: 'sessionlog.session.duration_seconds',
+  PROCESS_START: 'sessionlog.process.start',
+
+  // Turn-level
   TURN_COUNT: 'sessionlog.turns',
+  TURN_DURATION: 'sessionlog.turn.duration_ms',
+
+  // File-level
   FILES_TOUCHED: 'sessionlog.files_touched',
+
+  // Checkpoint-level
   STEPS: 'sessionlog.steps',
+
+  // Skill/tool
+  SKILL_CALL: 'sessionlog.skill.call',
 } as const;
