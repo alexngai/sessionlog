@@ -10,7 +10,7 @@ import type { CheckpointID, CommittedMetadata, Summary, AgentType, TokenUsage } 
 import { CHECKPOINTS_BRANCH, checkpointIDPath } from '../types.js';
 import { git, catFile, lsTree } from '../git-operations.js';
 import { parseCheckpoint, parseAllSessions } from '../utils/trailers.js';
-import { resolveSessionRepoConfig, type SessionRepoConfig } from '../utils/session-repo.js';
+import { resolveSessionRepoConfig } from '../utils/session-repo.js';
 
 // ============================================================================
 // Types
