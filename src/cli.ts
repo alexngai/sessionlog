@@ -40,11 +40,7 @@ import { createLifecycleHandler } from './hooks/lifecycle.js';
 import { getAgent } from './agent/registry.js';
 import { hasHookSupport } from './agent/types.js';
 import { getVersion } from './index.js';
-import {
-  getWorktreeRoot,
-  initSessionRepo,
-  resolveSessionRepoPath,
-} from './git-operations.js';
+import { getWorktreeRoot, initSessionRepo, resolveSessionRepoPath } from './git-operations.js';
 import { resolveSessionRepoConfig } from './utils/session-repo.js';
 
 // ============================================================================
@@ -534,10 +530,17 @@ async function cmdConfig(args: string[]): Promise<void> {
 
     // Validate key is a known setting (supports dot-notation for sessionRepo.*)
     const validKeys = [
-      'enabled', 'strategy', 'logLevel', 'skipPushSessions',
-      'telemetryEnabled', 'summarizationEnabled', 'sessionRepoPath',
-      'sessionRepo.remote', 'sessionRepo.directory',
-      'sessionRepo.localPath', 'sessionRepo.autoPush',
+      'enabled',
+      'strategy',
+      'logLevel',
+      'skipPushSessions',
+      'telemetryEnabled',
+      'summarizationEnabled',
+      'sessionRepoPath',
+      'sessionRepo.remote',
+      'sessionRepo.directory',
+      'sessionRepo.localPath',
+      'sessionRepo.autoPush',
     ];
     if (!validKeys.includes(key)) {
       console.error(`Unknown setting: ${key}. Valid keys: ${validKeys.join(', ')}`);
@@ -558,9 +561,7 @@ async function cmdConfig(args: string[]): Promise<void> {
     // - sessionRepo.autoPush → local
     // - everything else → local (unless --project)
     const committableKeys = ['sessionRepo.remote', 'sessionRepo.directory'];
-    const localOnlyKeys = ['sessionRepoPath', 'sessionRepo.localPath', 'sessionRepo.autoPush'];
     const isCommittable = committableKeys.includes(key);
-    const isLocalOnly = localOnlyKeys.includes(key) && !useProject;
     const writeToProject = useProject || (isCommittable && !hasFlag(args, '--local'));
 
     // Build the settings update object (supports dot-notation)
@@ -574,9 +575,7 @@ async function cmdConfig(args: string[]): Promise<void> {
 
     if (coerced === undefined) {
       // Unsetting a key
-      const current = writeToProject
-        ? await loadProjectSettings()
-        : await loadLocalSettings();
+      const current = writeToProject ? await loadProjectSettings() : await loadLocalSettings();
       const obj = current as unknown as Record<string, unknown>;
       if (key.startsWith('sessionRepo.')) {
         const subKey = key.slice('sessionRepo.'.length);
@@ -613,7 +612,9 @@ async function cmdConfig(args: string[]): Promise<void> {
         await initSessionRepo(resolved);
         console.log(`Session repo initialized at ${resolved}`);
       } catch (e) {
-        console.warn(`Warning: could not initialize session repo: ${e instanceof Error ? e.message : String(e)}`);
+        console.warn(
+          `Warning: could not initialize session repo: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     }
     return;

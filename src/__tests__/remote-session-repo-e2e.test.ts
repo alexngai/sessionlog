@@ -16,16 +16,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync, execSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import {
-  getProjectID,
-  initSessionRepo,
   cloneSessionRepo,
   getSessionRepoLocalPath,
-  fetchSessionRepoAsync,
-  syncSessionRepoBranchAsync,
   pushSessionRepo,
-  getHead,
   refExists,
 } from '../git-operations.js';
 import { createSessionStore } from '../store/session-store.js';
@@ -252,12 +247,6 @@ describe('Remote Session Repo E2E', () => {
 
     const verifyStore = createCheckpointStore(undefined, verifyClone, CP_BRANCH);
     const all = await verifyStore.listCommitted(10);
-    expect(all.length).toBe(2);
-
-    const sessionIDs = all.map((c) => {
-      // Read session content to get sessionID
-      return c.sessions[0]?.metadata ?? '';
-    });
     // Both developers' checkpoints are present
     expect(all.length).toBe(2);
   });
