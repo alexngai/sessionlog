@@ -21,6 +21,7 @@ export const AGENT_NAMES = {
   CURSOR: 'cursor' as AgentName,
   GEMINI: 'gemini' as AgentName,
   OPENCODE: 'opencode' as AgentName,
+  CODEX: 'codex' as AgentName,
 } as const;
 
 export const AGENT_TYPES = {
@@ -28,6 +29,7 @@ export const AGENT_TYPES = {
   CURSOR: 'Cursor IDE' as AgentType,
   GEMINI: 'Gemini CLI' as AgentType,
   OPENCODE: 'OpenCode' as AgentType,
+  CODEX: 'Codex' as AgentType,
   UNKNOWN: 'Agent' as AgentType,
 } as const;
 

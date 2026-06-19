@@ -12,7 +12,7 @@ Zero production dependencies. Requires Node.js >= 18 and Git.
 
 ```
 src/
-  agent/          Agent implementations (claude-code, cursor, gemini, opencode)
+  agent/          Agent implementations (claude-code, cursor, gemini, opencode, codex)
   commands/       CLI command implementations (enable, disable, status, rewind, etc.)
   events/         JSONL event log (checkpoint events for external consumers)
   hooks/          Lifecycle handler + git hooks + skill version resolver

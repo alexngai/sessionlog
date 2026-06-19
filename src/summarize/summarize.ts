@@ -8,6 +8,7 @@
 
 import type { AgentType, Summary } from '../types.js';
 import { AGENT_TYPES } from '../types.js';
+import { classifyApplyPatchPaths } from '../agent/agents/codex.js';
 import {
   parseFromBytes,
   extractUserContent,
@@ -68,10 +69,88 @@ export function buildCondensedTranscriptFromBytes(
       return buildCondensedTranscriptFromGemini(content);
     case AGENT_TYPES.OPENCODE:
       return buildCondensedTranscriptFromOpenCode(content);
+    case AGENT_TYPES.CODEX:
+      return buildCondensedTranscriptFromCodex(content);
     default:
       // Claude Code, Cursor, Unknown - all use JSONL format
       return buildCondensedTranscriptFromJSONL(content);
   }
+}
+
+/**
+ * Build condensed transcript from Codex rollout JSONL format.
+ *
+ * Each line is `{ timestamp, type, payload }`. User and assistant turns are
+ * `response_item` messages; file mutations are `custom_tool_call` entries named
+ * `apply_patch` whose `input` is a plain-text patch envelope.
+ */
+function buildCondensedTranscriptFromCodex(content: Buffer | string): Entry[] {
+  const str = typeof content === 'string' ? content : content.toString('utf-8');
+  const entries: Entry[] = [];
+
+  for (const rawLine of str.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    let parsed: { type?: string; payload?: Record<string, unknown> };
+    try {
+      parsed = JSON.parse(line) as { type?: string; payload?: Record<string, unknown> };
+    } catch {
+      continue;
+    }
+
+    if (parsed.type !== 'response_item' || !parsed.payload) continue;
+    const payload = parsed.payload;
+    const payloadType = payload.type as string | undefined;
+
+    if (payloadType === 'message') {
+      const text = extractCodexMessageText(payload.content);
+      const role = payload.role as string | undefined;
+      if (text && role === 'user') {
+        entries.push({ type: 'user', content: text });
+      } else if (text && role === 'assistant') {
+        entries.push({ type: 'assistant', content: text });
+      }
+    } else if (payloadType === 'custom_tool_call') {
+      const name = (payload.name as string | undefined) ?? '';
+      const input = (payload.input as string | undefined) ?? '';
+      entries.push({
+        type: 'tool',
+        toolName: name,
+        toolDetail: extractCodexToolDetail(name, input),
+      });
+    }
+  }
+
+  return entries;
+}
+
+function extractCodexMessageText(content: unknown): string {
+  if (!Array.isArray(content)) return '';
+  const texts: string[] = [];
+  for (const item of content) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof (item as Record<string, unknown>).text === 'string'
+    ) {
+      const type = (item as Record<string, unknown>).type;
+      if (type === 'input_text' || type === 'output_text') {
+        texts.push((item as Record<string, unknown>).text as string);
+      }
+    }
+  }
+  return texts.join('\n');
+}
+
+function extractCodexToolDetail(name: string, input: string): string {
+  // apply_patch envelopes are long; summarize them as the affected file list.
+  if (name === 'apply_patch') {
+    const { added, modified, deleted } = classifyApplyPatchPaths(input);
+    const files = [...added, ...modified, ...deleted];
+    return files.join(', ');
+  }
+  return input.length > 120 ? input.slice(0, 120) : input;
 }
 
 /**
