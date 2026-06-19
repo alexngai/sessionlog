@@ -24,11 +24,7 @@
 
 import { createRequire } from 'node:module';
 import { EventType } from '../types.js';
-import type {
-  TelemetryExporter,
-  TelemetryEvent,
-  OTelSettings,
-} from './types.js';
+import type { TelemetryExporter, TelemetryEvent, OTelSettings } from './types.js';
 import { SemanticAttributes, MetricNames } from './types.js';
 
 const require = createRequire(import.meta.url);
@@ -45,7 +41,10 @@ type Span = import('@opentelemetry/api').Span;
 type Meter = import('@opentelemetry/api').Meter;
 type Counter = import('@opentelemetry/api').Counter;
 type Histogram = import('@opentelemetry/api').Histogram;
-type Logger = import('@opentelemetry/api').Logger;
+// The Logs API lives in @opentelemetry/sdk-logs, not @opentelemetry/api;
+// derive the type from the provider so we don't depend on the separate
+// @opentelemetry/api-logs package.
+type Logger = ReturnType<LoggerProvider['getLogger']>;
 type TracerProvider = import('@opentelemetry/sdk-trace-node').NodeTracerProvider;
 type MeterProvider = import('@opentelemetry/sdk-metrics').MeterProvider;
 type LoggerProvider = import('@opentelemetry/sdk-logs').LoggerProvider;
@@ -221,8 +220,9 @@ export async function createOTelExporter(settings: OTelSettings): Promise<Teleme
     const attrs = metricAttrs(event);
 
     // Turn duration
-    const turnDurationMs = event.meta?.turnDurationMs
-      ?? (trace.turnStartTime ? Date.now() - trace.turnStartTime : undefined);
+    const turnDurationMs =
+      event.meta?.turnDurationMs ??
+      (trace.turnStartTime ? Date.now() - trace.turnStartTime : undefined);
     if (turnDurationMs != null) {
       turnSpan.setAttribute(SemanticAttributes.TURN_DURATION_MS, turnDurationMs);
       histograms.turnDuration.record(turnDurationMs, attrs);
@@ -556,7 +556,7 @@ async function initProviders(settings: OTelSettings): Promise<{
     { OTLPMetricExporter },
     { LoggerProvider, SimpleLogRecordProcessor },
     { OTLPLogExporter },
-    { resourceFromAttributes },
+    { Resource },
   ] = await Promise.all([
     import('@opentelemetry/sdk-trace-node'),
     import('@opentelemetry/sdk-trace-base'),
@@ -568,11 +568,10 @@ async function initProviders(settings: OTelSettings): Promise<{
     import('@opentelemetry/resources'),
   ]);
 
-  const endpoint = settings.endpoint
-    ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT
-    ?? 'http://localhost:4318';
+  const endpoint =
+    settings.endpoint ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? 'http://localhost:4318';
 
-  const resource = resourceFromAttributes({
+  const resource = new Resource({
     'service.name': 'sessionlog',
     'service.version': getVersion(),
     ...settings.resourceAttributes,
@@ -584,9 +583,7 @@ async function initProviders(settings: OTelSettings): Promise<{
   };
 
   const tracerProvider = new NodeTracerProvider({ resource });
-  tracerProvider.addSpanProcessor(
-    new SimpleSpanProcessor(new OTLPTraceExporter(exporterConfig)),
-  );
+  tracerProvider.addSpanProcessor(new SimpleSpanProcessor(new OTLPTraceExporter(exporterConfig)));
   tracerProvider.register();
 
   const meterProvider = new MeterProvider({
