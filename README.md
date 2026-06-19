@@ -6,7 +6,7 @@ This package provides the core library used to build session tracking, checkpoin
 
 ## Features
 
-- **Multi-agent support** — Claude Code, Cursor, Gemini CLI, and OpenCode
+- **Multi-agent support** — Claude Code, Cursor, Gemini CLI, OpenCode, and Codex
 - **Session lifecycle tracking** — automatic capture of prompts, responses, files modified, and token usage
 - **Git-native checkpoints** — temporary snapshots on shadow branches, permanent records on `sessionlog/checkpoints/v1`
 - **Rewind** — restore code to any previous checkpoint

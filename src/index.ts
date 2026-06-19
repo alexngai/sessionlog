@@ -233,6 +233,14 @@ export {
   type ToolState as OpenCodeToolState,
 } from './agent/agents/opencode.js';
 
+export {
+  createCodexAgent,
+  extractFilesFromApplyPatch,
+  classifyApplyPatchPaths,
+  parseSessionStartTime as parseCodexSessionStartTime,
+  sanitizePortableTranscript as sanitizeCodexTranscript,
+} from './agent/agents/codex.js';
+
 // =============================================================================
 // Hooks
 // =============================================================================
