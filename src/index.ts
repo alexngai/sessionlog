@@ -146,6 +146,8 @@ export {
 
 export { createCheckpointStore, type CheckpointStore } from './store/checkpoint-store.js';
 
+export { resolveSessionRepoConfig, type SessionRepoConfig } from './utils/session-repo.js';
+
 // =============================================================================
 // Native Store (replaces CLI store)
 // =============================================================================
@@ -240,6 +242,8 @@ export {
   parseSessionStartTime as parseCodexSessionStartTime,
   sanitizePortableTranscript as sanitizeCodexTranscript,
 } from './agent/agents/codex.js';
+
+export { createSwarmHarnessAgent } from './agent/agents/swarm-harness.js';
 
 // =============================================================================
 // Hooks
