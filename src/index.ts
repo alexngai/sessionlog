@@ -146,6 +146,8 @@ export {
 
 export { createCheckpointStore, type CheckpointStore } from './store/checkpoint-store.js';
 
+export { resolveSessionRepoConfig, type SessionRepoConfig } from './utils/session-repo.js';
+
 // =============================================================================
 // Native Store (replaces CLI store)
 // =============================================================================
