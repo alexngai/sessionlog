@@ -243,7 +243,7 @@ export {
   sanitizePortableTranscript as sanitizeCodexTranscript,
 } from './agent/agents/codex.js';
 
-export { createSwarmHarnessAgent } from './agent/agents/swarm-harness.js';
+export { createOpenSwarmAgent } from './agent/agents/openswarm.js';
 
 // =============================================================================
 // Hooks

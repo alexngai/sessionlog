@@ -22,7 +22,7 @@ export const AGENT_NAMES = {
   GEMINI: 'gemini' as AgentName,
   OPENCODE: 'opencode' as AgentName,
   CODEX: 'codex' as AgentName,
-  SWARM_HARNESS: 'swarm-harness' as AgentName,
+  OPENSWARM: 'openswarm' as AgentName,
 } as const;
 
 export const AGENT_TYPES = {
@@ -31,7 +31,7 @@ export const AGENT_TYPES = {
   GEMINI: 'Gemini CLI' as AgentType,
   OPENCODE: 'OpenCode' as AgentType,
   CODEX: 'Codex' as AgentType,
-  SWARM_HARNESS: 'Swarm Harness' as AgentType,
+  OPENSWARM: 'OpenSwarm' as AgentType,
   UNKNOWN: 'Agent' as AgentType,
 } as const;
 

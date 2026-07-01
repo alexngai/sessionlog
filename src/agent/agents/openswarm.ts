@@ -1,20 +1,20 @@
 /**
- * Swarm Harness Agent
+ * OpenSwarm Agent
  *
- * Sessionlog agent integration for swarm-harness — a multi-agent coding swarm
+ * Sessionlog agent integration for openswarm — a multi-agent coding swarm
  * that runs its own engine (not an external IDE/CLI). Unlike the other agents,
- * swarm-harness drives the lifecycle programmatically (via
+ * openswarm drives the lifecycle programmatically (via
  * LifecycleHandler.dispatch) rather than via installed hooks, so this adapter
  * implements the core Agent + TranscriptAnalyzer surface but not HookSupport.
  *
- * Transcript format: swarm-harness writes one `events.jsonl` per worker session
+ * Transcript format: openswarm writes one `events.jsonl` per worker session
  * — a stream of LaneEvent records:
  *   { ts, agentId, type, payload, ... }
  * where `type` is one of text_delta | tool_use_start | tool_use_input |
  * tool_use_end | tool_result | message_stop | turn_start | turn_end | ...
- * (wire-compatible with swarm-harness's NormalizedEvent).
+ * (wire-compatible with openswarm's NormalizedEvent).
  *
- * Session layout (see SWARM_HARNESS_SESSION_DIR):
+ * Session layout (see OPENSWARM_SESSION_DIR):
  *   <sessionDir>/<sessionID>/events.jsonl
  */
 
@@ -25,8 +25,8 @@ import type { Agent, TranscriptAnalyzer } from '../types.js';
 import { registerAgent } from '../registry.js';
 
 const SWARM_DIR = '.swarm';
-/** Per-repo sessions root (override with SWARM_HARNESS_SESSION_DIR). */
-const SESSIONS_SUBDIR = path.join(SWARM_DIR, 'swarm-harness', 'sessions');
+/** Per-repo sessions root (override with OPENSWARM_SESSION_DIR). */
+const SESSIONS_SUBDIR = path.join(SWARM_DIR, 'openswarm', 'sessions');
 const TRANSCRIPT_FILE = 'events.jsonl';
 
 /** Tool-input keys that name a file the tool modifies. */
@@ -125,7 +125,7 @@ function collectAssistantText(events: LaneEventRecord[]): string {
 }
 
 function collectPrompts(events: LaneEventRecord[]): string[] {
-  // swarm-harness records the user/task prompt on turn_start (payload.prompt).
+  // openswarm records the user/task prompt on turn_start (payload.prompt).
   const prompts: string[] = [];
   for (const ev of events) {
     if (ev.type !== 'turn_start') continue;
@@ -139,18 +139,18 @@ function collectPrompts(events: LaneEventRecord[]): string[] {
 // Agent implementation
 // ===========================================================================
 
-class SwarmHarnessAgent implements Agent, TranscriptAnalyzer {
-  readonly name = AGENT_NAMES.SWARM_HARNESS;
-  readonly type = AGENT_TYPES.SWARM_HARNESS;
-  readonly description = 'swarm-harness — multi-agent coding swarm';
+class OpenSwarmAgent implements Agent, TranscriptAnalyzer {
+  readonly name = AGENT_NAMES.OPENSWARM;
+  readonly type = AGENT_TYPES.OPENSWARM;
+  readonly description = 'openswarm — multi-agent coding swarm';
   readonly isPreview = true;
   readonly protectedDirs = [SWARM_DIR];
 
   async detectPresence(cwd?: string): Promise<boolean> {
-    if (process.env.SWARM_HARNESS_SESSION_DIR) return true;
+    if (process.env.OPENSWARM_SESSION_DIR) return true;
     const repoRoot = cwd ?? process.cwd();
     try {
-      const stat = await fs.promises.stat(path.join(repoRoot, SWARM_DIR, 'swarm-harness'));
+      const stat = await fs.promises.stat(path.join(repoRoot, SWARM_DIR, 'openswarm'));
       return stat.isDirectory();
     } catch {
       return false;
@@ -158,7 +158,7 @@ class SwarmHarnessAgent implements Agent, TranscriptAnalyzer {
   }
 
   async getSessionDir(repoPath: string): Promise<string> {
-    const override = process.env.SWARM_HARNESS_SESSION_DIR;
+    const override = process.env.OPENSWARM_SESSION_DIR;
     if (override) return override;
     return path.join(repoPath, SESSIONS_SUBDIR);
   }
@@ -176,7 +176,7 @@ class SwarmHarnessAgent implements Agent, TranscriptAnalyzer {
   }
 
   formatResumeCommand(sessionID: string): string {
-    return `swarm-harness --resume ${sessionID}`;
+    return `openswarm --resume ${sessionID}`;
   }
 
   // =========================================================================
@@ -229,12 +229,12 @@ class SwarmHarnessAgent implements Agent, TranscriptAnalyzer {
     if (assistant) return assistant.slice(0, 500);
     const tools = events.filter((e) => e.type === 'tool_use_start').length;
     const turns = events.filter((e) => e.type === 'turn_start').length;
-    return `swarm-harness session: ${turns} turn(s), ${tools} tool call(s)`;
+    return `openswarm session: ${turns} turn(s), ${tools} tool call(s)`;
   }
 }
 
-export function createSwarmHarnessAgent(): SwarmHarnessAgent {
-  return new SwarmHarnessAgent();
+export function createOpenSwarmAgent(): OpenSwarmAgent {
+  return new OpenSwarmAgent();
 }
 
-registerAgent(AGENT_NAMES.SWARM_HARNESS, () => new SwarmHarnessAgent());
+registerAgent(AGENT_NAMES.OPENSWARM, () => new OpenSwarmAgent());

@@ -1,12 +1,12 @@
 /**
- * Tests for the Swarm Harness agent adapter.
+ * Tests for the OpenSwarm agent adapter.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createSwarmHarnessAgent } from '../agent/agents/swarm-harness.js';
+import { createOpenSwarmAgent } from '../agent/agents/openswarm.js';
 import { getAgent } from '../agent/registry.js';
 import { AGENT_NAMES, AGENT_TYPES } from '../types.js';
 import { hasTranscriptAnalyzer } from '../agent/types.js';
@@ -39,41 +39,41 @@ const SAMPLE = [
   { ts: 7, agentId: 'w1', type: 'message_stop', payload: { stopReason: 'end_turn' } },
 ];
 
-describe('SwarmHarnessAgent', () => {
+describe('OpenSwarmAgent', () => {
   let tmp: string;
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swarm-harness-agent-'));
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openswarm-agent-'));
   });
 
   afterEach(() => {
     fs.rmSync(tmp, { recursive: true, force: true });
-    delete process.env.SWARM_HARNESS_SESSION_DIR;
+    delete process.env.OPENSWARM_SESSION_DIR;
   });
 
   it('registers in the agent registry', () => {
-    const agent = getAgent(AGENT_NAMES.SWARM_HARNESS);
+    const agent = getAgent(AGENT_NAMES.OPENSWARM);
     expect(agent).not.toBeNull();
-    expect(agent!.type).toBe(AGENT_TYPES.SWARM_HARNESS);
+    expect(agent!.type).toBe(AGENT_TYPES.OPENSWARM);
     expect(agent!.protectedDirs).toContain('.swarm');
   });
 
-  it('detects presence via SWARM_HARNESS_SESSION_DIR', async () => {
-    const agent = createSwarmHarnessAgent();
+  it('detects presence via OPENSWARM_SESSION_DIR', async () => {
+    const agent = createOpenSwarmAgent();
     expect(await agent.detectPresence('/no/such/repo')).toBe(false);
-    process.env.SWARM_HARNESS_SESSION_DIR = tmp;
+    process.env.OPENSWARM_SESSION_DIR = tmp;
     expect(await agent.detectPresence('/no/such/repo')).toBe(true);
   });
 
   it('resolves the per-session events.jsonl path', () => {
-    const agent = createSwarmHarnessAgent();
+    const agent = createOpenSwarmAgent();
     expect(agent.resolveSessionFile('/sessions', 's1')).toBe(
       path.join('/sessions', 's1', 'events.jsonl'),
     );
   });
 
   it('extracts modified files by reassembling streamed tool input', async () => {
-    const agent = createSwarmHarnessAgent();
+    const agent = createOpenSwarmAgent();
     expect(hasTranscriptAnalyzer(agent)).toBe(true);
     const file = writeTranscript(tmp, 's1', SAMPLE);
     const { files, currentPosition } = await agent.extractModifiedFilesFromOffset(file, 0);
@@ -82,19 +82,19 @@ describe('SwarmHarnessAgent', () => {
   });
 
   it('extracts the task prompt from turn_start', async () => {
-    const agent = createSwarmHarnessAgent();
+    const agent = createOpenSwarmAgent();
     const file = writeTranscript(tmp, 's1', SAMPLE);
     expect(await agent.extractPrompts(file, 0)).toEqual(['add a db migration']);
   });
 
   it('summarizes from assistant text', async () => {
-    const agent = createSwarmHarnessAgent();
+    const agent = createOpenSwarmAgent();
     const file = writeTranscript(tmp, 's1', SAMPLE);
     expect(await agent.extractSummary(file)).toBe('Let me edit the file.');
   });
 
   it('is resilient to malformed lines and missing files', async () => {
-    const agent = createSwarmHarnessAgent();
+    const agent = createOpenSwarmAgent();
     expect(await agent.getTranscriptPosition('/no/such/file')).toBe(0);
     const sessionDir = path.join(tmp, 's2');
     fs.mkdirSync(sessionDir, { recursive: true });
