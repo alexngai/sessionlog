@@ -325,6 +325,7 @@ Design RESTful APIs following company standards.
       expect(skill.sourceType).toBe('skill-tree');
       expect(skill.version).toBe('1.5.0');
       expect(skill.upstreamVersion).toBe('1.5.0');
+      expect(skill.upstreamSkillId).toBe('api-design');
     });
 
     it('should handle skill-tree skill with missing .skilltree.json gracefully', async () => {
@@ -757,6 +758,7 @@ function process(data: UserInput): ProcessedResult { ... }
       expect(skill.sourceType).toBe('skill-tree');
       expect(skill.version).toBe('1.3.0');
       expect(skill.upstreamVersion).toBe('1.3.0');
+      expect(skill.upstreamSkillId).toBe('typescript-refactor');
     });
 
     it('should correctly resolve materialized skill (symlink from .skilltree to .claude/skills)', async () => {

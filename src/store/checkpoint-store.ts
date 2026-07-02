@@ -293,6 +293,7 @@ export function createCheckpointStore(
         planModeEntries: opts.planModeEntries,
         planEntries: opts.planEntries,
         skillsUsed: opts.skillsUsed,
+        skillsSurfaced: opts.skillsSurfaced,
       };
 
       // Create blob objects in the target repo

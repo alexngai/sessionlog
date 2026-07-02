@@ -13,9 +13,11 @@ import {
   type SessionPhase,
   type TokenUsage,
   type PlanEntry,
+  type TrackedSkill,
   STALE_SESSION_DAYS,
 } from '../types.js';
 import { getSessionsDir, atomicWriteFile } from '../git-operations.js';
+import { mergeSkillsSurfaced, normalizeSurfacedSkillsInput } from '../hooks/skill-tracking.js';
 
 // ============================================================================
 // Session Store Interface
@@ -42,6 +44,9 @@ export interface SessionStore {
 
   /** Merge annotations into a session's existing annotations (load-merge-save) */
   annotate(sessionID: string, annotations: Record<string, unknown>): Promise<boolean>;
+
+  /** Record skills surfaced/injected into context (load-merge-save) */
+  surfaceSkills(sessionID: string, skills: TrackedSkill[]): Promise<boolean>;
 }
 
 // ============================================================================
@@ -179,7 +184,31 @@ export function createSessionStore(cwd?: string, sessionsDir?: string): SessionS
       const filePath = sessionFilePath(dir, sessionID);
       const state = parseSessionFile(filePath);
       if (!state) return false;
-      state.annotations = { ...state.annotations, ...annotations };
+
+      const { skillsSurfaced, ...rest } = annotations;
+      const surfaced = normalizeSurfacedSkillsInput(skillsSurfaced);
+      if (surfaced) {
+        state.skillsSurfaced = mergeSkillsSurfaced(state.skillsSurfaced, surfaced);
+      }
+
+      if (Object.keys(rest).length > 0) {
+        state.annotations = { ...state.annotations, ...rest };
+      }
+
+      const content = JSON.stringify(serializeSessionState(state), null, 2);
+      await atomicWriteFile(filePath, content);
+      return true;
+    },
+
+    async surfaceSkills(sessionID: string, skills: TrackedSkill[]): Promise<boolean> {
+      if (skills.length === 0) return false;
+
+      const dir = await getDir();
+      const filePath = sessionFilePath(dir, sessionID);
+      const state = parseSessionFile(filePath);
+      if (!state) return false;
+
+      state.skillsSurfaced = mergeSkillsSurfaced(state.skillsSurfaced, skills);
       const content = JSON.stringify(serializeSessionState(state), null, 2);
       await atomicWriteFile(filePath, content);
       return true;
@@ -233,6 +262,9 @@ export function normalizeSessionState(id: string, data: Record<string, unknown>)
     planEntries: normalizePlanEntries(data),
     skillsUsed: Array.isArray(data.skillsUsed)
       ? (data.skillsUsed as SessionState['skillsUsed'])
+      : undefined,
+    skillsSurfaced: Array.isArray(data.skillsSurfaced)
+      ? (data.skillsSurfaced as SessionState['skillsSurfaced'])
       : undefined,
     annotations:
       data.annotations && typeof data.annotations === 'object' && !Array.isArray(data.annotations)

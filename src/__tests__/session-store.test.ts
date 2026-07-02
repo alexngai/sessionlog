@@ -263,5 +263,73 @@ describe('Session Store', () => {
       expect(state!.stepCount).toBe(5);
       expect(state!.filesTouched).toEqual(['a.ts']);
     });
+
+    it('should promote skillsSurfaced from annotate payload into session state', async () => {
+      writeSession('sess-5', { startedAt: '2026-01-01T00:00:00Z' });
+      const store = createSessionStore(undefined, tmpDir);
+
+      const result = await store.annotate('sess-5', {
+        skillsSurfaced: [
+          { name: 'verification-before-completion', surfacedAt: '2026-01-01T00:00:00Z' },
+          'tdd',
+        ],
+        swarmId: 'gsd-123',
+      });
+
+      expect(result).toBe(true);
+      const state = await store.load('sess-5');
+      expect(state!.annotations).toEqual({ swarmId: 'gsd-123' });
+      expect(state!.skillsSurfaced).toHaveLength(2);
+      expect(state!.skillsSurfaced![0].name).toBe('verification-before-completion');
+      expect(state!.skillsSurfaced![1].name).toBe('tdd');
+      expect(state!.skillsSurfaced![1].surfacedAt).toBeDefined();
+    });
+  });
+
+  describe('surfaceSkills', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sessionlog-test-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function writeSession(id: string, data: Record<string, unknown>): void {
+      fs.writeFileSync(
+        path.join(tmpDir, `${id}.json`),
+        JSON.stringify({ sessionID: id, baseCommit: '', phase: 'active', ...data }, null, 2),
+      );
+    }
+
+    it('should merge surfaced skills by name', async () => {
+      writeSession('sess-1', {
+        startedAt: '2026-01-01T00:00:00Z',
+        skillsSurfaced: [{ name: 'tdd', surfacedAt: '2026-01-01T00:00:00Z' }],
+      });
+      const store = createSessionStore(undefined, tmpDir);
+
+      const result = await store.surfaceSkills('sess-1', [
+        { name: 'verification-before-completion', surfacedAt: '2026-01-02T00:00:00Z' },
+        { name: 'tdd', surfacedAt: '2026-01-02T01:00:00Z', version: '2.0.0' },
+      ]);
+
+      expect(result).toBe(true);
+      const state = await store.load('sess-1');
+      expect(state!.skillsSurfaced).toHaveLength(2);
+      const tdd = state!.skillsSurfaced!.find((s) => s.name === 'tdd');
+      expect(tdd!.version).toBe('2.0.0');
+    });
+
+    it('should return false for missing session or empty payload', async () => {
+      const store = createSessionStore(undefined, tmpDir);
+      expect(
+        await store.surfaceSkills('missing', [{ name: 'tdd', surfacedAt: '2026-01-01T00:00:00Z' }]),
+      ).toBe(false);
+      writeSession('sess-2', { startedAt: '2026-01-01T00:00:00Z' });
+      expect(await store.surfaceSkills('sess-2', [])).toBe(false);
+    });
   });
 });

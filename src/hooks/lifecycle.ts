@@ -21,6 +21,7 @@ import {
   type SkillVersionResolverChain,
   type SkillVersionResolverChainOptions,
 } from './skill-version-resolver.js';
+import { enrichTrackedSkill, mergeSkillsSurfaced } from './skill-tracking.js';
 
 // ============================================================================
 // Types
@@ -87,6 +88,9 @@ export function createLifecycleHandler(config: LifecycleConfig): LifecycleHandle
           break;
         case EventType.SkillUse:
           await handleSkillUse(agent, event);
+          break;
+        case EventType.SkillsSurfaced:
+          await handleSkillsSurfaced(agent, event);
           break;
       }
     },
@@ -388,40 +392,62 @@ export function createLifecycleHandler(config: LifecycleConfig): LifecycleHandle
     if (!state.skillsUsed) state.skillsUsed = [];
 
     if (event.skillName) {
-      const tracked: TrackedSkill = {
-        name: event.skillName,
-        args: event.skillArgs,
-        usedAt: new Date().toISOString(),
-      };
-
-      // Attempt to resolve version/provenance info
-      if (cwd) {
-        try {
-          const resolved = await skillResolverChain.resolve({
-            skillName: event.skillName,
-            cwd,
-          });
-          if (resolved) {
-            tracked.sourceType = resolved.sourceType;
-            tracked.filePath = resolved.filePath;
-            tracked.version = resolved.version;
-            tracked.commitSha = resolved.commitSha;
-            if (resolved.plugin) {
-              tracked.pluginPackage = resolved.plugin.packageName;
-            }
-            if (resolved.upstream) {
-              tracked.upstreamVersion = resolved.upstream.version;
-            }
-          }
-        } catch {
-          // Version resolution is best-effort — don't block skill tracking
-        }
-      }
+      const tracked = await enrichTrackedSkill(
+        event.skillName,
+        skillResolverChain,
+        { skillName: event.skillName, cwd: cwd ?? process.cwd() },
+        {
+          args: event.skillArgs,
+          usedAt: new Date().toISOString(),
+        },
+      );
 
       state.skillsUsed.push(tracked);
     }
 
     state.lastInteractionTime = new Date().toISOString();
+    await sessionStore.save(state);
+  }
+
+  async function handleSkillsSurfaced(_agent: Agent, event: Event): Promise<void> {
+    const state = await sessionStore.load(event.sessionID);
+    if (!state) return;
+
+    const surfacedAt = new Date().toISOString();
+    const resolveCtx = { skillName: '', cwd: cwd ?? process.cwd() };
+    const incoming: TrackedSkill[] = [];
+
+    if (event.skillsSurfaced?.length) {
+      for (const skill of event.skillsSurfaced) {
+        if (!skill.name) continue;
+        incoming.push({
+          ...skill,
+          surfacedAt: skill.surfacedAt ?? surfacedAt,
+        });
+      }
+    }
+
+    if (event.surfacedSkillNames?.length) {
+      for (const name of event.surfacedSkillNames) {
+        if (!name.trim()) continue;
+        incoming.push(
+          await enrichTrackedSkill(
+            name.trim(),
+            skillResolverChain,
+            {
+              ...resolveCtx,
+              skillName: name.trim(),
+            },
+            { surfacedAt },
+          ),
+        );
+      }
+    }
+
+    if (incoming.length === 0) return;
+
+    state.skillsSurfaced = mergeSkillsSurfaced(state.skillsSurfaced, incoming);
+    state.lastInteractionTime = surfacedAt;
     await sessionStore.save(state);
   }
 }

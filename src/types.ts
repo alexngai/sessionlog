@@ -79,6 +79,8 @@ export enum EventType {
   PlanModeEnter = 10,
   PlanModeExit = 11,
   SkillUse = 12,
+  /** Skills injected/available in context without an explicit Skill tool call */
+  SkillsSurfaced = 13,
 }
 
 export interface Event {
@@ -111,6 +113,10 @@ export interface Event {
   skillName?: string;
   /** Skill arguments (from Skill tool_input) */
   skillArgs?: string;
+  /** Skill names surfaced/injected into context (SkillsSurfaced events) */
+  surfacedSkillNames?: string[];
+  /** Pre-enriched surfaced skills (SkillsSurfaced events or external annotate payloads) */
+  skillsSurfaced?: TrackedSkill[];
 }
 
 // ============================================================================
@@ -134,7 +140,8 @@ export interface TrackedTask {
 export interface TrackedSkill {
   name: string;
   args?: string;
-  usedAt: string;
+  /** When the skill was invoked via the Skill tool (skillsUsed only) */
+  usedAt?: string;
   /** How the skill was resolved (repo-skill, user-skill, skill-tree, plugin, unknown) */
   sourceType?: string;
   /** Resolved file path (relative to project root for repo skills) */
@@ -147,6 +154,10 @@ export interface TrackedSkill {
   pluginPackage?: string;
   /** For skill-tree skills: upstream version info */
   upstreamVersion?: string;
+  /** For skill-tree skills: stable upstream skill identifier */
+  upstreamSkillId?: string;
+  /** When the skill was surfaced/injected into context (skillsSurfaced only) */
+  surfacedAt?: string;
 }
 
 /** A single plan mode enter/exit cycle */
@@ -198,6 +209,8 @@ export interface SessionState {
   planEntries?: PlanEntry[];
   /** Skills used during the session */
   skillsUsed?: TrackedSkill[];
+  /** Skills surfaced/injected into context without an explicit Skill tool call */
+  skillsSurfaced?: TrackedSkill[];
   /** Extensible annotations from external systems (e.g., swarm metadata) */
   annotations?: Record<string, unknown>;
 }
@@ -334,6 +347,8 @@ export interface CommittedMetadata {
   planEntries?: PlanEntry[];
   /** Skills used during this checkpoint */
   skillsUsed?: TrackedSkill[];
+  /** Skills surfaced/injected into context during this checkpoint */
+  skillsSurfaced?: TrackedSkill[];
 }
 
 export interface Summary {
@@ -452,6 +467,8 @@ export interface WriteCommittedOptions {
   planEntries?: PlanEntry[];
   /** Skills used */
   skillsUsed?: TrackedSkill[];
+  /** Skills surfaced/injected into context */
+  skillsSurfaced?: TrackedSkill[];
 }
 
 export interface UpdateCommittedOptions {
