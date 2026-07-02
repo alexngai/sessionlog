@@ -25,9 +25,24 @@ import type { Agent, TranscriptAnalyzer } from '../types.js';
 import { registerAgent } from '../registry.js';
 
 const SWARM_DIR = '.swarm';
-/** Per-repo sessions root (override with OPENSWARM_SESSION_DIR). */
+const OPENSWARM_DIR = '.openswarm';
+/**
+ * Per-repo sessions root (override with OPENSWARM_SESSION_DIR). The swarmkit
+ * namespace is migrating `.swarm` → `.openswarm`; both are honored (new name
+ * preferred when present) so this reader finds sessions regardless of which
+ * layout the writing openswarm build produced.
+ */
 const SESSIONS_SUBDIR = path.join(SWARM_DIR, 'openswarm', 'sessions');
+const OPENSWARM_SESSIONS_SUBDIR = path.join(OPENSWARM_DIR, 'openswarm', 'sessions');
 const TRANSCRIPT_FILE = 'events.jsonl';
+
+/** Prefer the new `.openswarm/...` layout when it exists, else legacy `.swarm/...`. */
+function resolveSessionsSubdir(repoPath: string): string {
+  if (fs.existsSync(path.join(repoPath, OPENSWARM_SESSIONS_SUBDIR))) {
+    return OPENSWARM_SESSIONS_SUBDIR;
+  }
+  return SESSIONS_SUBDIR;
+}
 
 /** Tool-input keys that name a file the tool modifies. */
 const FILE_PATH_KEYS = ['file_path', 'filePath', 'path', 'notebook_path'];
@@ -144,23 +159,26 @@ class OpenSwarmAgent implements Agent, TranscriptAnalyzer {
   readonly type = AGENT_TYPES.OPENSWARM;
   readonly description = 'openswarm — multi-agent coding swarm';
   readonly isPreview = true;
-  readonly protectedDirs = [SWARM_DIR];
+  readonly protectedDirs = [OPENSWARM_DIR, SWARM_DIR];
 
   async detectPresence(cwd?: string): Promise<boolean> {
     if (process.env.OPENSWARM_SESSION_DIR) return true;
     const repoRoot = cwd ?? process.cwd();
-    try {
-      const stat = await fs.promises.stat(path.join(repoRoot, SWARM_DIR, 'openswarm'));
-      return stat.isDirectory();
-    } catch {
-      return false;
+    for (const base of [OPENSWARM_DIR, SWARM_DIR]) {
+      try {
+        const stat = await fs.promises.stat(path.join(repoRoot, base, 'openswarm'));
+        if (stat.isDirectory()) return true;
+      } catch {
+        // try the next candidate
+      }
     }
+    return false;
   }
 
   async getSessionDir(repoPath: string): Promise<string> {
     const override = process.env.OPENSWARM_SESSION_DIR;
     if (override) return override;
-    return path.join(repoPath, SESSIONS_SUBDIR);
+    return path.join(repoPath, resolveSessionsSubdir(repoPath));
   }
 
   getSessionID(input: HookInput): string {

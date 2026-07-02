@@ -72,6 +72,29 @@ describe('OpenSwarmAgent', () => {
     );
   });
 
+  it('protects both the .openswarm and legacy .swarm namespaces', () => {
+    const agent = getAgent(AGENT_NAMES.OPENSWARM);
+    expect(agent!.protectedDirs).toContain('.openswarm');
+    expect(agent!.protectedDirs).toContain('.swarm');
+  });
+
+  it('getSessionDir prefers .openswarm, else falls back to legacy .swarm', async () => {
+    const agent = createOpenSwarmAgent();
+    // No migrated dir → legacy .swarm layout.
+    expect(await agent.getSessionDir(tmp)).toBe(path.join(tmp, '.swarm', 'openswarm', 'sessions'));
+    // Create the migrated layout → it wins.
+    const migrated = path.join(tmp, '.openswarm', 'openswarm', 'sessions');
+    fs.mkdirSync(migrated, { recursive: true });
+    expect(await agent.getSessionDir(tmp)).toBe(migrated);
+  });
+
+  it('detectPresence sees the migrated .openswarm layout', async () => {
+    const agent = createOpenSwarmAgent();
+    expect(await agent.detectPresence(tmp)).toBe(false);
+    fs.mkdirSync(path.join(tmp, '.openswarm', 'openswarm'), { recursive: true });
+    expect(await agent.detectPresence(tmp)).toBe(true);
+  });
+
   it('extracts modified files by reassembling streamed tool input', async () => {
     const agent = createOpenSwarmAgent();
     expect(hasTranscriptAnalyzer(agent)).toBe(true);
