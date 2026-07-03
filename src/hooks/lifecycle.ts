@@ -7,6 +7,7 @@
 
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
+import * as fsSync from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import type { Event, SessionState, TrackedSkill } from '../types.js';
 import { EventType, addTokenUsage } from '../types.js';
@@ -43,6 +44,35 @@ export interface LifecycleHandler {
 // ============================================================================
 // Implementation
 // ============================================================================
+
+/**
+ * Convert an absolute file path to a repo-relative one. Resolves symlinks on
+ * both sides (macOS `/tmp` → `/private/tmp`) so prefix matching is reliable.
+ * Falls back to the original path when it lies outside the repo.
+ */
+function normalizeToRepoRelative(absFile: string, repoRoot: string): string {
+  let realRoot = repoRoot;
+  let realFile = absFile;
+  try {
+    realRoot = fsSync.realpathSync(repoRoot);
+  } catch {
+    // keep as-is
+  }
+  try {
+    realFile = fsSync.realpathSync(absFile);
+  } catch {
+    // file may not exist anymore — normalize the parent instead
+    const dir = path.dirname(absFile);
+    try {
+      realFile = path.join(fsSync.realpathSync(dir), path.basename(absFile));
+    } catch {
+      // keep as-is
+    }
+  }
+  const rel = path.relative(realRoot, realFile);
+  if (rel.length === 0 || rel.startsWith('..') || path.isAbsolute(rel)) return absFile;
+  return rel;
+}
 
 export function createLifecycleHandler(config: LifecycleConfig): LifecycleHandler {
   const { sessionStore, cwd } = config;
@@ -180,9 +210,17 @@ export function createLifecycleHandler(config: LifecycleConfig): LifecycleHandle
           state.checkpointTranscriptStart,
         );
 
-        // Merge new files into filesTouched
+        // Merge new files into filesTouched. Normalize to repo-relative paths:
+        // adapters that pull paths from tool inputs (e.g. openswarm lane
+        // events) often carry absolute paths, but the commit-hook overlap
+        // checks (prepareCommitMsg/postCommit) compare against `git diff
+        // --name-only` output, which is repo-relative — absolute entries
+        // would never match and the session would silently fail to condense.
+        const repoRoot = path.resolve(cwd ?? process.cwd());
         const fileSet = new Set(state.filesTouched);
-        for (const file of files) fileSet.add(file);
+        for (const file of files) {
+          fileSet.add(path.isAbsolute(file) ? normalizeToRepoRelative(file, repoRoot) : file);
+        }
         state.filesTouched = Array.from(fileSet);
       } catch {
         // Ignore extraction errors

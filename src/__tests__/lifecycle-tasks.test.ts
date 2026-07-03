@@ -756,4 +756,54 @@ describe('Lifecycle Handlers — Task & Plan Mode', () => {
       expect(state!.planEntries![1].enteredAt).toBeDefined();
     });
   });
+
+  describe('TurnEnd filesTouched normalization', () => {
+    it('converts absolute transcript paths to repo-relative for hook overlap checks', async () => {
+      const { mkdtempSync, realpathSync, writeFileSync, rmSync } = await import('node:fs');
+      const os = await import('node:os');
+      const path = await import('node:path');
+
+      // A real directory so realpath resolution works (macOS /tmp symlink).
+      const repo = mkdtempSync(path.join(os.tmpdir(), 'sl-lifecycle-'));
+      try {
+        writeFileSync(path.join(repo, 'hello.js'), 'x');
+
+        // Agent whose transcript analyzer reports ABSOLUTE paths (like the
+        // openswarm adapter, which pulls file_path from tool inputs).
+        const absAgent = {
+          name: 'AbsPaths',
+          async detectPresence() {
+            return true;
+          },
+          async getTranscriptPosition() {
+            return 0;
+          },
+          async extractModifiedFilesFromOffset() {
+            return {
+              files: [realpathSync(path.join(repo, 'hello.js')), '/outside/other.ts'],
+              currentPosition: 0,
+            };
+          },
+        };
+
+        const store = createMockSessionStore(
+          baseSessionState({ transcriptPath: path.join(repo, 't.jsonl') }),
+        );
+        const handler = createLifecycleHandler({
+          sessionStore: store,
+          checkpointStore: createMockCheckpointStore(),
+          cwd: repo,
+        });
+
+        await handler.dispatch(absAgent as never, makeEvent({ type: EventType.TurnEnd }));
+
+        const state = await store.load('test-session');
+        expect(state!.filesTouched).toContain('hello.js');
+        // Paths outside the repo are left untouched rather than mangled.
+        expect(state!.filesTouched).toContain('/outside/other.ts');
+      } finally {
+        rmSync(repo, { recursive: true, force: true });
+      }
+    });
+  });
 });
