@@ -1,18 +1,23 @@
 # Agent Instructions
 
-<!-- SWARMKIT-WIKI:START -->
-## SwarmKit Ecosystem Knowledge Base
+Sessionlog is an unofficial TypeScript reimplementation of the [Entire CLI](https://github.com/entireio/cli): a Git-native session tracker and checkpoint manager for AI coding agents (Claude Code, Cursor, Gemini CLI, OpenCode, Codex, OpenSwarm). It records sessions as searchable checkpoints on a separate `sessionlog/checkpoints/v1` branch, keeping the user's working branch clean, and supports rewind/resume across agent sessions.
 
-This repository participates in the SwarmKit ecosystem. Before changing architecture, package boundaries, cross-repo integrations, protocols, task/dispatch behavior, memory/learning flows, workspace/git behavior, or agent orchestration semantics, query the shared knowledge base:
+## Build and test
 
-```sh
-node /Users/alexngai/GitHub/swarmkit-wiki/scripts/query-knowledge.mjs context --cwd "$PWD"
-node /Users/alexngai/GitHub/swarmkit-wiki/scripts/query-knowledge.mjs repo sessionlog
-node /Users/alexngai/GitHub/swarmkit-wiki/scripts/query-knowledge.mjs interactions sessionlog
-node /Users/alexngai/GitHub/swarmkit-wiki/scripts/query-knowledge.mjs search "<concept>"
+```bash
+npm install
+npm run build          # tsc
+npm test               # vitest run
+npm run lint           # eslint src/
+npm run format          # prettier --write
 ```
 
-Canonical ecosystem memory lives at `/Users/alexngai/GitHub/swarmkit-wiki`.
+## Top conventions
 
-When this repo changes knowledge that should persist across agents, update the relevant wiki article, semantic model, raw snapshot, graph artifact, or cross-repo interaction data in `swarmkit-wiki`. Do not treat this repo's local `.understand-anything/` cache as canonical; graph artifacts are centralized in `swarmkit-wiki/.understand-anything/graphs/`.
-<!-- SWARMKIT-WIKI:END -->
+- ESM-only (`"type": "module"`); relative imports use the `.js` extension (TypeScript ESM convention).
+- Zero production dependencies — git operations shell out via `child_process`, no git library.
+- All public API surfaces are exported from `src/index.ts`; the optional OpenTelemetry integration is exported separately via the `sessionlog/telemetry` subpath.
+- Tests live in `src/__tests__/` (vitest).
+- A husky `pre-commit` hook runs `lint-staged`.
+
+See `CLAUDE.md` for the full guide (architecture, event types, settings, OTel integration).
