@@ -4,7 +4,7 @@ Project context for AI coding agents working on this repository.
 
 ## What is sessionlog
 
-An unofficial TypeScript reimplementation of the Entire CLI. It captures AI agent sessions (Claude Code, Cursor, Gemini CLI, OpenCode) as Git-native checkpoints — searchable, rewindable records stored on a separate `sessionlog/checkpoints/v1` branch so the user's working branch stays clean.
+An unofficial TypeScript reimplementation of the [Entire CLI](https://github.com/entireio/cli). It captures AI agent sessions (Claude Code, Cursor, Gemini CLI, OpenCode, Codex, OpenSwarm) as Git-native checkpoints — searchable, rewindable records stored on a separate `sessionlog/checkpoints/v1` branch so the user's working branch stays clean.
 
 Zero production dependencies. Requires Node.js >= 18 and Git.
 
@@ -12,7 +12,7 @@ Zero production dependencies. Requires Node.js >= 18 and Git.
 
 ```
 src/
-  agent/          Agent implementations (claude-code, cursor, gemini, opencode, codex)
+  agent/          Agent implementations (claude-code, cursor, gemini, opencode, codex, openswarm)
   commands/       CLI command implementations (enable, disable, status, rewind, etc.)
   events/         JSONL event log (checkpoint events for external consumers)
   hooks/          Lifecycle handler + git hooks + skill version resolver
@@ -42,6 +42,8 @@ npm run format         # prettier
 ```
 
 Type-checking: `npx tsc --noEmit`. Pre-existing errors from missing `@types/node` in the container are expected — they resolve after `npm install`.
+
+A husky `pre-commit` hook runs `lint-staged` (see `.lintstagedrc.json`).
 
 ## Key architecture concepts
 
@@ -148,20 +150,3 @@ Key fields: `enabled`, `strategy`, `logLevel`, `skipPushSessions`, `telemetryEna
 - All public API surfaces exported from `src/index.ts`
 - Telemetry module exported via `sessionlog/telemetry` subpath
 - Tests in `src/__tests__/` using vitest
-
-<!-- SWARMKIT-WIKI:START -->
-## SwarmKit Ecosystem Knowledge Base
-
-This repository participates in the SwarmKit ecosystem. Before changing architecture, package boundaries, cross-repo integrations, protocols, task/dispatch behavior, memory/learning flows, workspace/git behavior, or agent orchestration semantics, query the shared knowledge base:
-
-```sh
-node /Users/alexngai/GitHub/swarmkit-wiki/scripts/query-knowledge.mjs context --cwd "$PWD"
-node /Users/alexngai/GitHub/swarmkit-wiki/scripts/query-knowledge.mjs repo sessionlog
-node /Users/alexngai/GitHub/swarmkit-wiki/scripts/query-knowledge.mjs interactions sessionlog
-node /Users/alexngai/GitHub/swarmkit-wiki/scripts/query-knowledge.mjs search "<concept>"
-```
-
-Canonical ecosystem memory lives at `/Users/alexngai/GitHub/swarmkit-wiki`.
-
-When this repo changes knowledge that should persist across agents, update the relevant wiki article, semantic model, raw snapshot, graph artifact, or cross-repo interaction data in `swarmkit-wiki`. Do not treat this repo's local `.understand-anything/` cache as canonical; graph artifacts are centralized in `swarmkit-wiki/.understand-anything/graphs/`.
-<!-- SWARMKIT-WIKI:END -->
